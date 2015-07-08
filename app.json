@@ -1,0 +1,41 @@
+{
+	"id": "com.sonos",
+	"version": "1.0",
+	"name": {
+		"en": "Sonos"
+	},
+	"author": {
+		"name": "Emile Nijssen",
+		"website": "http://www.emilenijssen.nl"
+	},
+	"images": {
+		"large": "large.jpg",
+		"small": "small.jpg"
+	},
+	"drivers": [
+		{
+			"id": "sonos",
+			"name": {
+				"en": "Sonos"
+			},
+			"class": "speaker",
+			"capabilities": [ "radio" ],
+			"pair": [
+				{
+					"id": "list_speakers",
+					"template": "list_devices",
+					"navigation": {
+						"next": "add_speakers"
+					}
+				},
+				{
+					"id": "add_speakers",
+					"template": "add_devices"
+				}
+			]
+		}
+	],
+	"dependencies": {
+		"sonos": "*"
+	}
+}
