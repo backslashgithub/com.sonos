@@ -9,9 +9,13 @@
 		"name": "Athom B.V.",
 		"website": "https://www.athom.com"
 	},
+	"category": [ "music" ],
+	"description": {
+		"en": "Sonos for Homey"
+	},
 	"images": {
-		"large": "/assets/images/large.jpg",
-		"small": "/assets/images/small.jpg"
+		"large": "/assets/images/large.png",
+		"small": "/assets/images/small.png"
 	},
 	"drivers": [
 		{
@@ -19,19 +23,12 @@
 			"name": {
 				"en": "Sonos"
 			},
+			"images": {
+				"large": "/drivers/sonos/assets/images/large.png",
+				"small": "/drivers/sonos/assets/images/small.png"
+			},
 			"class": "speaker",
 			"capabilities": [ "speaker_playing", "speaker_prev", "speaker_next", "volume_set" ],
-			"capabilitiesOptions": {
-				"speaker_playing": {
-					"title": " "
-				},
-				"speaker_prev": {
-					"title": " "
-				},
-				"speaker_next": {
-					"title": " "
-				}
-			},
 			"mobile": {
 				"components": [
 					{
@@ -42,6 +39,7 @@
 						"id": "button",
 						"capabilities": [ "speaker_prev", "speaker_playing", "speaker_next" ],
 						"options": {
+							"hideTitle": [ "speaker_prev", "speaker_playing", "speaker_next" ],
 							"toggle": [ "speaker_playing" ],
 							"icons": {
 								"speaker_prev": "drivers/sonos/assets/mobile/prev.svg",
