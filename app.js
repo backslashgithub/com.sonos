@@ -1,12 +1,5 @@
-"use strict";
-  
-function App() 
-{
-	
-}
+'use strict';
 
-module.exports = App;
-
-App.prototype.init = function(){
-	
+module.exports.init = function() {
+	console.log(`${Homey.manifest.id} running...`);
 }
