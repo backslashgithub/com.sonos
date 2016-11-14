@@ -43,9 +43,20 @@ class Driver extends events.EventEmitter {
 		this.capabilities.volume_set.get = this._onCapabilityVolumeSetGet.bind(this);
 		this.capabilities.volume_set.set = this._onCapabilityVolumeSetSet.bind(this);
 
+		Homey.manager('flow')
+			.on('action.play', this._onFlowActionPlay.bind(this))
+			.on('action.pause', this._onFlowActionPause.bind(this))
+			.on('action.prev', this._onFlowActionPrev.bind(this))
+			.on('action.next', this._onFlowActionNext.bind(this))
+			.on('action.volume_set', this._onFlowActionVolumeSet.bind(this))
+
 		this._search();
 
 	}
+
+	/*
+		Helper methods
+	*/
 
 	log() {
 		console.log.bind( null, '[log]' ).apply( null, arguments );
@@ -104,6 +115,10 @@ class Driver extends events.EventEmitter {
 		return this._devices[ device_data.sn ] || new Error('invalid_device');
 	}
 
+	/*
+		Exports
+	*/
+
 	_onPair( socket ) {
 
 		socket
@@ -144,6 +159,10 @@ class Driver extends events.EventEmitter {
 		this._uninitDevice( device_data );
 	}
 
+	/*
+		Capabilities
+	*/
+
 	_onCapabilitySpeakerPlayingGet( device_data, callback ) {
 		this.log('_onCapabilitySpeakerPlayingGet');
 
@@ -164,9 +183,17 @@ class Driver extends events.EventEmitter {
 		if( device instanceof Error ) return callback( device );
 
 		if( value === true ) {
-			device.sonos.play(callback);
+			device.sonos.play(( err ) => {
+				if( err ) return callback( err );
+				module.exports.realtime( device_data, 'speaker_playing', value );
+				return callback( null, value );
+			});
 		} else {
-			device.sonos.pause(callback);
+			device.sonos.pause(( err ) => {
+				if( err ) return callback( err );
+				module.exports.realtime(device_data, 'speaker_playing', value );
+				return callback( null, value );
+			});
 		}
 
 	}
@@ -199,7 +226,7 @@ class Driver extends events.EventEmitter {
 
 		device.sonos.getVolume(( err, volume ) => {
 			if( err ) return callback( err );
-			callback( null, volume/100 );
+			return callback( null, volume/100 );
 		});
 
 	}
@@ -212,9 +239,34 @@ class Driver extends events.EventEmitter {
 
 		device.sonos.setVolume( value * 100, ( err, volume ) => {
 			if( err ) return callback( err );
-			callback( null, value );
+
+			module.exports.realtime( device_data, 'volume_set', value );
+			return callback( null, value );
 		});
 
+	}
+
+	/*
+		Flow
+	*/
+	_onFlowActionPlay( callback, args ) {
+		this._onCapabilitySpeakerPlayingSet( args.device, true, callback );
+	}
+
+	_onFlowActionPause( callback, args ) {
+		this._onCapabilitySpeakerPlayingSet( args.device, false, callback );
+	}
+
+	_onFlowActionPrev( callback, args ) {
+		this._onCapabilitySpeakerPrevSet( args.device, true, callback );
+	}
+
+	_onFlowActionNext( callback, args ) {
+		this._onCapabilitySpeakerNextSet( args.device, true, callback );
+	}
+
+	_onFlowActionVolumeSet( callback, args ) {
+		this._onCapabilityVolumeSetSet( args.device, args.volume, callback );
 	}
 
 }
