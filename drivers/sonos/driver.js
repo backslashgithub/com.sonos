@@ -95,8 +95,12 @@ class Driver extends events.EventEmitter {
 			this._devices[ device_data.sn ] = {
 				sonos: new sonos.Sonos( searchResult.host, searchResult.port ),
 				state: {
-
+					speaker_playing: false
 				}
+			}
+
+			for( let capabilityId in this._devices[ device_data.sn ].state ) {
+				module.exports.realtime( device_data, capabilityId, this._devices[ device_data.sn ].state[ capabilityId] );
 			}
 
 		} else {
@@ -162,17 +166,13 @@ class Driver extends events.EventEmitter {
 	/*
 		Capabilities
 	*/
-
 	_onCapabilitySpeakerPlayingGet( device_data, callback ) {
 		this.log('_onCapabilitySpeakerPlayingGet');
 
 		let device = this._getDevice( device_data );
 		if( device instanceof Error ) return callback( device );
 
-		device.sonos.getCurrentState(( err, state ) => {
-			if( err ) return callback( err );
-			callback( null, state === 'playing' );
-		});
+		callback( null, device.state.speaker_playing );
 
 	}
 
