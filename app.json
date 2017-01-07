@@ -28,7 +28,7 @@
 				"small": "/drivers/sonos/assets/images/small.png"
 			},
 			"class": "speaker",
-			"capabilities": [ "speaker_playing", "speaker_prev", "speaker_next", "volume_set" ],
+			"capabilities": [ "speaker_playing", "speaker_prev", "speaker_next", "volume_set", "volume_mute" ],
 			"mobile": {
 				"components": [
 					{
@@ -161,6 +161,38 @@
 						"label": "%",
 						"labelMultiplier": 100,
 						"labelDecimals": 0
+					}
+				]
+			},
+			{
+				"id": "volume_mute",
+				"title": {
+					"en": "Mute"
+				},
+				"args": [
+					{
+						"type": "device",
+						"name": "device",
+						"filter": {
+							"driver_id": "sonos",
+							"capabilities": "volume_mute"
+						}
+					}
+				]
+			},
+			{
+				"id": "volume_unmute",
+				"title": {
+					"en": "Unmute"
+				},
+				"args": [
+					{
+						"type": "device",
+						"name": "device",
+						"filter": {
+							"driver_id": "sonos",
+							"capabilities": "volume_mute"
+						}
 					}
 				]
 			}
