@@ -43,12 +43,18 @@ class Driver extends events.EventEmitter {
 		this.capabilities.volume_set.get = this._onCapabilityVolumeSetGet.bind(this);
 		this.capabilities.volume_set.set = this._onCapabilityVolumeSetSet.bind(this);
 
+		this.capabilities.volume_mute = {};
+		this.capabilities.volume_mute.get = this._onCapabilityVolumeMuteGet.bind(this);
+		this.capabilities.volume_mute.set = this._onCapabilityVolumeMuteSet.bind(this);
+
 		Homey.manager('flow')
 			.on('action.play', this._onFlowActionPlay.bind(this))
 			.on('action.pause', this._onFlowActionPause.bind(this))
 			.on('action.prev', this._onFlowActionPrev.bind(this))
 			.on('action.next', this._onFlowActionNext.bind(this))
 			.on('action.volume_set', this._onFlowActionVolumeSet.bind(this))
+			.on('action.volume_mute', this._onFlowActionVolumeMute.bind(this))
+			.on('action.volume_unmute', this._onFlowActionVolumeUnmute.bind(this));
 
 		this._search();
 
@@ -232,7 +238,7 @@ class Driver extends events.EventEmitter {
 	}
 
 	_onCapabilityVolumeSetSet( device_data, value, callback ) {
-		this.log('_onCapabilityVolumeSetSet');
+		this.log('_onCapabilityVolumeSetSet', value);
 
 		let device = this._getDevice( device_data );
 		if( device instanceof Error ) return callback( device );
@@ -246,6 +252,33 @@ class Driver extends events.EventEmitter {
 
 	}
 
+  _onCapabilityVolumeMuteGet( device_data, callback ) {
+    this.log('_onCapabilityVolumeMuteGet');
+
+    let device = this._getDevice( device_data );
+    if( device instanceof Error ) return callback( device );
+
+    device.sonos.getMuted(( err, muted ) => {
+      if( err ) return callback( err );
+      return callback( null, muted );
+    });
+
+  }
+
+  _onCapabilityVolumeMuteSet( device_data, value, callback ) {
+    this.log('_onCapabilityVolumeMuteSet', value);
+
+    let device = this._getDevice( device_data );
+    if( device instanceof Error ) return callback( device );
+
+    device.sonos.setMuted( value, ( err, muted ) => {
+      if( err ) return callback( err );
+
+      module.exports.realtime( device_data, 'volume_mute', value );
+      return callback( null, value );
+    });
+
+  }
 	/*
 		Flow
 	*/
@@ -269,6 +302,15 @@ class Driver extends events.EventEmitter {
 		this._onCapabilityVolumeSetSet( args.device, args.volume, callback );
 	}
 
+  _onFlowActionVolumeMute( callback, args ) {
+    this.log('_onFlowActionVolumeMute',args);
+    this._onCapabilityVolumeMuteSet( args.device, true, callback );
+  }
+
+  _onFlowActionVolumeUnmute( callback, args ) {
+    this.log('_onFlowActionVolumeUnmute',args);
+    this._onCapabilityVolumeMuteSet( args.device, false, callback );
+  }
 }
 
 module.exports = new Driver();
