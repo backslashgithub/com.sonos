@@ -1,5 +1,5 @@
 'use strict';
 
-module.exports.init = function() {
+module.exports.init = () => {
 	console.log(`${Homey.manifest.id} running...`);
-}
+};
