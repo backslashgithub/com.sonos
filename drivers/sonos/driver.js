@@ -179,8 +179,8 @@ class Driver extends events.EventEmitter {
 							this._playSpotify(device, track.stream_url, () => {
 								device.sonos.currentTrack((err, currentTrack) => {
 									console.log('got spotify track info', err, currentTrack);
-									speaker.updateState(currentTrack);
 									module.exports.realtime(deviceData, 'speaker_playing', true);
+									speaker.updateState(currentTrack);
 								});
 							});
 							break;
@@ -188,8 +188,8 @@ class Driver extends events.EventEmitter {
 							this._playUrl(device, track, () => {
 								device.sonos.currentTrack((err, currentTrack) => {
 									console.log('got track info', err, currentTrack);
-									speaker.updateState(currentTrack);
 									module.exports.realtime(deviceData, 'speaker_playing', true);
+									speaker.updateState(currentTrack);
 								});
 							});
 					}
