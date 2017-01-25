@@ -200,6 +200,10 @@ class Driver extends events.EventEmitter {
 					console.log('set position', position);
 					device.sonos.seek(Math.round(position / 1000), callback);
 				});
+				speaker.on('setActive', (isActive, callback) => {
+					console.log('active state changed to ', isActive);
+					return callback();
+				});
 			});
 
 		} else {
