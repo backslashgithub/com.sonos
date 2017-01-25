@@ -17,12 +17,6 @@
 		"large": "/assets/images/large.png",
 		"small": "/assets/images/small.png"
 	},
-	"media": [
-		"play",
-		"search",
-		"getPlaylists",
-		"getPlaylist"
-	],
 	"drivers": [
 		{
 			"id": "sonos",
