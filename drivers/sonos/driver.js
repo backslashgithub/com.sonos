@@ -290,7 +290,9 @@ class Driver extends events.EventEmitter {
 		device.sonos.currentTrack((err, track) => {
 			if (device.isActiveSpeaker && device.lastTrack) {
 				console.log('comparing tracks', device.lastTrack, track);
-				const diffProp = Object.keys(track).find((trackProp) => device.lastTrack[trackProp] !== track[trackProp]);
+				const diffProp = Object.keys(track).find((trackProp) =>
+				trackProp !== 'position' && device.lastTrack[trackProp] !== track[trackProp]
+				);
 				if (diffProp) {
 					console.log('Property', diffProp, 'is not equal to lastTrack');
 					if (device.lastTrack.strikes >= 2) {
