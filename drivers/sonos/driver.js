@@ -131,8 +131,10 @@ class Driver extends events.EventEmitter {
 						fn: device.sonos.getCurrentState.bind(device.sonos),
 						parse: st => st === 'playing',
 					},
+					{ fn: this._compareTrack.bind(this, device) },
 					{ id: 'volume_set', fn: device.sonos.getVolume.bind(device.sonos), parse: vol => vol / 100 },
 					{ id: 'volume_mute', fn: device.sonos.getMuted.bind(device.sonos) },
+					{ id: 'get_queue' },
 				].map(capability =>
 					new Promise((resolve, reject) => {
 						capability.fn((err, state) => {
@@ -140,8 +142,13 @@ class Driver extends events.EventEmitter {
 
 							state = capability.parse ? capability.parse(state) : state;
 
-							device.state[capability.id] = state;
-							module.exports.realtime(deviceData, capability.id, state);
+							if (capability.id) {
+								device.state[capability.id] = state;
+								module.exports.realtime(deviceData, capability.id, state);
+							}
+							if (capability.onResult) {
+								capability.onResult(err, state);
+							}
 						});
 					})
 				);
@@ -173,6 +180,7 @@ class Driver extends events.EventEmitter {
 				if (err) return Homey.error(err);
 				device.speaker = speaker;
 				speaker.on('setTrack', (track, callback) => {
+					device.lastTrack = undefined;
 					console.log('set track', track);
 					switch (track.format) {
 						case 'spotify:track:id':
@@ -182,6 +190,12 @@ class Driver extends events.EventEmitter {
 									module.exports.realtime(deviceData, 'speaker_playing', true);
 									speaker.updateState(currentTrack);
 									callback(err, !err);
+									device.sonos.currentTrack((err, currTrack) => {
+										device.lastTrack = err || currTrack;
+										if (currTrack) {
+											device.speaker.updateState({ position: currTrack.position });
+										}
+									});
 								});
 							});
 							break;
@@ -192,6 +206,12 @@ class Driver extends events.EventEmitter {
 									module.exports.realtime(deviceData, 'speaker_playing', true);
 									speaker.updateState(currentTrack);
 									callback(err, !err);
+									device.sonos.currentTrack((err, currTrack) => {
+										device.lastTrack = err || currTrack;
+										if (currTrack) {
+											device.speaker.updateState({ position: currTrack.position });
+										}
+									});
 								});
 							});
 					}
@@ -202,6 +222,7 @@ class Driver extends events.EventEmitter {
 				});
 				speaker.on('setActive', (isActive, callback) => {
 					console.log('active state changed to ', isActive);
+					device.isActiveSpeaker = isActive;
 					return callback();
 				});
 			});
@@ -262,6 +283,28 @@ class Driver extends events.EventEmitter {
 				callback(err, result);
 				device.sonos.currentTrack(console.log.bind(null, 'TRACK'));
 			});
+		});
+	}
+
+	_compareTrack(device) {
+		device.sonos.currentTrack((err, track) => {
+			if (device.isActiveSpeaker && device.lastTrack) {
+				console.log('comparing tracks', device.lastTrack, track);
+				const diffProp = Object.keys(track).find((trackProp) => device.lastTrack[trackProp] !== track[trackProp]);
+				if (diffProp) {
+					console.log('Property', diffProp, 'is not equal to lastTrack');
+					if (device.lastTrack.strikes >= 2) {
+						console.log('your out');
+						return device.speaker.updateState(new Error('Track not in sync with Homey'));
+					}
+					console.log('strike');
+					device.lastTrack.strikes = (device.lastTrack.strikes || 0) + 1;
+					return;
+				}
+				console.log('correct, updating position', track.position);
+				device.lastTrack.strikes = undefined;
+				device.speaker.updateState({ position: track.position });
+			}
 		});
 	}
 
