@@ -191,8 +191,8 @@ class Driver extends events.EventEmitter {
 									speaker.updateState(currentTrack);
 									callback(err, !err);
 									device.sonos.currentTrack((err, currTrack) => {
-										device.lastTrack = err || currTrack;
 										if (currTrack) {
+											device.lastTrack = currTrack;
 											device.speaker.updateState({ position: currTrack.position });
 										}
 									});
@@ -207,8 +207,8 @@ class Driver extends events.EventEmitter {
 									speaker.updateState(currentTrack);
 									callback(err, !err);
 									device.sonos.currentTrack((err, currTrack) => {
-										device.lastTrack = err || currTrack;
 										if (currTrack) {
+											device.lastTrack = currTrack;
 											device.speaker.updateState({ position: currTrack.position });
 										}
 									});
@@ -288,10 +288,10 @@ class Driver extends events.EventEmitter {
 
 	_compareTrack(device) {
 		device.sonos.currentTrack((err, track) => {
+			if (err) return;
 			if (device.isActiveSpeaker && device.lastTrack) {
-				console.log('comparing tracks', device.lastTrack, track);
 				const diffProp = Object.keys(track).find((trackProp) =>
-				trackProp !== 'position' && device.lastTrack[trackProp] !== track[trackProp]
+					trackProp !== 'position' && device.lastTrack[trackProp] !== track[trackProp]
 				);
 				if (diffProp) {
 					console.log('Property', diffProp, 'is not equal to lastTrack');
