@@ -157,18 +157,18 @@ class Driver extends events.EventEmitter {
 			device.pollInterval = setInterval(pollState, 5000);
 
 			// device.sonos.play({ uri: 'spotify:track:7BKLCZ1jbUBVqRi2FVlTVw' }, console.log.bind(null, 'PLAY'));
-			// this._playUrl(device, {
-			// 	// stream_url: 'https://api.soundcloud.com/tracks/92285620/stream?client_id=c39d675784ad098e33ae68ca8057154c',
-			// 	// stream_url: 'https://chromecast.athomdev.com/song.mp3?client_id=c39d675784ad098e33ae68ca8057154c&amp;test=true',
-			// 	// stream_url: 'http://translate.google.com/translate_tts?ie=UTF-8&total=1&idx=0&textlen=32&client=tw-ob&q=Hi%20this%20is%20a%20test&tl=En-gb',
-			// 	// stream_url: 'https://cf-media.sndcdn.com/FLlfJVV2cQJn.128.mp3?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiKjovL2NmLW1lZGlhLnNuZGNkbi5jb20vRkxsZkpWVjJjUUpuLjEyOC5tcDMiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE0ODUxNzk0ODB9fX1dfQ__&Signature=CG4u-7lNQBopRdlgP6-giJbbw4KXH7FXYQtwuB6hU~fcshUmzxFL7O7yVcPY-4W6VzujkIV~EIzkpXFX8RaWkJ0j2NqO7XGaKyWVfSxqz70E8YGvuomwaY9oHdh5Rahm0FOuKPaGEfvqJx5WD7wauWcrEb6VNVKJgkoTp6jAYOukIw5MtB5Mob5NHwuydBefocryt4z3tcbYOybp40BZyV9gUcbEqyLkNHrY8PnBbaAJ26C4UDwI8PoWUU5kua8OW-mJhY4bmHcfw0qkjK89GmUVC-z8AVEiPCVRxl6avmVXcRnmPjRYkJQmNM0h0JwRF7Yx6UrcrOyZ6Bf1Aal1WA__&Key-Pair-Id=APKAJAGZ7VMH2PFPW6UQ',
-			// 	stream_url: 'https://r2---sn-5hne6nlr.c.doc-0-0-sj.sj.googleusercontent.com/videoplayback?id=ee712c3184908c23&itag=25&source=skyjam&begin=0&upn=5CIuIIfpFnQ&o=06776416745300621078&cmbypass=yes&ratebypass=yes&ip=217.114.108.248&ipbits=0&expire=1485188656&sparams=cmbypass,expire,id,ip,ipbits,itag,mm,mn,ms,mv,nh,o,pl,ratebypass,source,upn&signature=58AD2D61EB006E366961E276BF0CB80ACC14AB32.5661448B95FC48BCFFBF1EBCF542589042B2E4E3&key=cms1&mm=31&mn=sn-5hne6nlr&ms=au&mt=1485188449&mv=m&nh=IgpwcjA0LmFtczE1KgkxMjcuMC4wLjE&pl=20',
-			// 	title: 'TIROL',
-			// 	duration: 78000,
-			// 	artwork: {
-			// 		medium: 'https://pbs.twimg.com/profile_images/608222870708224001/WRlSqpdh.jpg',
-			// 	},
-			// }, console.log.bind(null, 'PLAY'));
+			this._playUrl(device, {
+				// stream_url: 'https://api.soundcloud.com/tracks/92285620/stream?client_id=c39d675784ad098e33ae68ca8057154c',
+				stream_url: 'https://chromecast.athomdev.com/song.mp3?client_id=c39d675784ad098e33ae68ca8057154c&amp;test=true',
+				// stream_url: 'http://translate.google.com/translate_tts?ie=UTF-8&total=1&idx=0&textlen=32&client=tw-ob&q=Hi%20this%20is%20a%20test&tl=En-gb',
+				// stream_url: 'https://cf-media.sndcdn.com/FLlfJVV2cQJn.128.mp3?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiKjovL2NmLW1lZGlhLnNuZGNkbi5jb20vRkxsZkpWVjJjUUpuLjEyOC5tcDMiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE0ODUxNzk0ODB9fX1dfQ__&Signature=CG4u-7lNQBopRdlgP6-giJbbw4KXH7FXYQtwuB6hU~fcshUmzxFL7O7yVcPY-4W6VzujkIV~EIzkpXFX8RaWkJ0j2NqO7XGaKyWVfSxqz70E8YGvuomwaY9oHdh5Rahm0FOuKPaGEfvqJx5WD7wauWcrEb6VNVKJgkoTp6jAYOukIw5MtB5Mob5NHwuydBefocryt4z3tcbYOybp40BZyV9gUcbEqyLkNHrY8PnBbaAJ26C4UDwI8PoWUU5kua8OW-mJhY4bmHcfw0qkjK89GmUVC-z8AVEiPCVRxl6avmVXcRnmPjRYkJQmNM0h0JwRF7Yx6UrcrOyZ6Bf1Aal1WA__&Key-Pair-Id=APKAJAGZ7VMH2PFPW6UQ',
+				// stream_url: 'https://r2---sn-5hne6nlr.c.doc-0-0-sj.sj.googleusercontent.com/videoplayback?id=ee712c3184908c23&itag=25&source=skyjam&begin=0&upn=5CIuIIfpFnQ&o=06776416745300621078&cmbypass=yes&ratebypass=yes&ip=217.114.108.248&ipbits=0&expire=1485188656&sparams=cmbypass,expire,id,ip,ipbits,itag,mm,mn,ms,mv,nh,o,pl,ratebypass,source,upn&signature=58AD2D61EB006E366961E276BF0CB80ACC14AB32.5661448B95FC48BCFFBF1EBCF542589042B2E4E3&key=cms1&mm=31&mn=sn-5hne6nlr&ms=au&mt=1485188449&mv=m&nh=IgpwcjA0LmFtczE1KgkxMjcuMC4wLjE&pl=20',
+				title: 'TIROL',
+				duration: 78000,
+				artwork: {
+					medium: 'https://pbs.twimg.com/profile_images/608222870708224001/WRlSqpdh.jpg',
+				},
+			}, console.log.bind(null, 'PLAY'));
 			// // this._playSpotify(device, '7BKLCZ1jbUBVqRi2FVlTVw', console.log.bind(null, 'QUEUE'));
 
 			// this._playSoundCloud(device, null, console.log.bind('PLAYSOUNDCLOUD'));
@@ -235,43 +235,49 @@ class Driver extends events.EventEmitter {
 	}
 
 	_playUrl(device, track, callback) {
-		device.sonos.flush(err => {
-			if (err) return callback(err);
-			const albumArt = track.artwork ? track.artwork.medium || track.artwork.large || track.artwork.small : null;
-			const duration = track.duration ? `${Math.floor(track.duration / 3600000)
-				}:${`0${Math.floor((track.duration % 3600000) / 60000)}`.slice(-2)
-				}:${`0${Math.round((track.duration % 60000) / 1000)}`.slice(-2)}` : null;
+		device.sonos.selectQueue(err => {
+			if (err) return console.log('selectQueue err') & callback(err);
+			device.sonos.flush(err => {
+				if (err) return console.log('flush err') & callback(err);
+				const albumArt = track.artwork ? track.artwork.medium || track.artwork.large || track.artwork.small : null;
+				const duration = track.duration ? `${Math.floor(track.duration / 3600000)
+					}:${`0${Math.floor((track.duration % 3600000) / 60000)}`.slice(-2)
+					}:${`0${Math.round((track.duration % 60000) / 1000)}`.slice(-2)}` : null;
 
-			device.sonos.play({
-				uri: htmlEntities(track.stream_url),
-				metadata: '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" ' +
-				'xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" ' +
-				'xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dlna="urn:schemas-dlna-org:metadata-1-0/">' +
-				'<item id="R:0/0/0" restricted="1">' +
-				(duration ? `<res duration="${duration}"></res>` : '') +
-				`<dc:title>${track.title || track.stream_url}</dc:title>` +
-				`<upnp:artist role="Performer">${
-				((track.artist || []).find(artist => artist.type === 'artist') || {}).name || ''}</upnp:artist>` +
-				`<upnp:album>${track.album || ''}</upnp:album>` +
-				`<dc:date>${track.release_date || '' /* TODO */}</dc:date>` +
-				`<upnp:genre>${track.genre || ''}</upnp:genre>` +
-				(albumArt ? `<upnp:albumArtURI>${albumArt}</upnp:albumArtURI>` : '') +
-				'<upnp:class>object.item.audioItem.musicTrack</upnp:class>' +
-				'</item>' +
-				'</DIDL-Lite>',
-			}, (err, result) => {
-				if (err) return callback(err);
-				device.sonos.play(callback);
+				device.sonos.play({
+					uri: htmlEntities(track.stream_url),
+					metadata: '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" ' +
+					'xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" ' +
+					'xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dlna="urn:schemas-dlna-org:metadata-1-0/">' +
+					'<item id="R:0/0/0" restricted="1">' +
+					(duration ? `<res duration="${duration}"></res>` : '') +
+					`<dc:title>${track.title || track.stream_url}</dc:title>` +
+					`<upnp:artist role="Performer">${
+					((track.artist || []).find(artist => artist.type === 'artist') || {}).name || ''}</upnp:artist>` +
+					`<upnp:album>${track.album || ''}</upnp:album>` +
+					`<dc:date>${track.release_date || '' /* TODO */}</dc:date>` +
+					`<upnp:genre>${track.genre || ''}</upnp:genre>` +
+					(albumArt ? `<upnp:albumArtURI>${albumArt}</upnp:albumArtURI>` : '') +
+					'<upnp:class>object.item.audioItem.musicTrack</upnp:class>' +
+					'</item>' +
+					'</DIDL-Lite>',
+				}, (err, result) => {
+					if (err) return console.log('play err') & callback(err);
+					device.sonos.play(callback);
+				});
 			});
 		});
 	}
 
 	_playSpotify(device, trackId, callback) {
-		device.sonos.flush(err => {
-			if (err) return callback(err);
-			device.sonos.addSpotifyQueue(trackId, (err) => {
+		device.sonos.selectQueue(err => {
+			if (err) return console.log('selectQueue err') & callback(err);
+			device.sonos.flush(err => {
 				if (err) return callback(err);
-				device.sonos.play(callback);
+				device.sonos.addSpotifyQueue(trackId, (err) => {
+					if (err) return callback(err);
+					device.sonos.play(callback);
+				});
 			});
 		});
 	}
