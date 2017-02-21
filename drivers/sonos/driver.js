@@ -110,6 +110,7 @@ class Driver extends events.EventEmitter {
 
 		const searchResult = this._searchResults[deviceData.sn];
 		if (searchResult) {
+			console.log('found sonos', searchResult);
 
 			if (this._devices[deviceData.sn] && this._devices[deviceData.sn].pollInterval) {
 				clearInterval(this._devices[deviceData.sn].pollInterval);
@@ -124,32 +125,32 @@ class Driver extends events.EventEmitter {
 			};
 			this._devices[deviceData.sn] = device;
 
+
+			setTimeout(() => this.realtime(deviceData, 'speaker_playing', false), 1000);
+			setTimeout(() => this.realtime(deviceData, 'speaker_playing', true), 2000);
+			setTimeout(() => this.realtime(deviceData, 'speaker_playing', true), 3000);
+			setTimeout(() => this.realtime(deviceData, 'speaker_playing', true), 4000);
+
+
 			const pollState = () => {
 				[
-					{
-						id: 'speaker_playing',
-						fn: device.sonos.getCurrentState.bind(device.sonos),
-						parse: st => st === 'playing',
-					},
 					{ fn: this._compareTrack.bind(this, device) },
 					{ id: 'volume_set', fn: device.sonos.getVolume.bind(device.sonos), parse: vol => vol / 100 },
 					{ id: 'volume_mute', fn: device.sonos.getMuted.bind(device.sonos) },
-					{ id: 'get_queue' },
-				].map(capability =>
-					new Promise((resolve, reject) => {
-						capability.fn((err, state) => {
-							if (err) return Homey.error(err);
+					// { id: 'get_queue' },
+				].forEach(capability =>
+					capability.fn((err, state) => {
+						if (err) return Homey.error(err);
 
-							state = capability.parse ? capability.parse(state) : state;
+						state = capability.parse ? capability.parse(state) : state;
 
-							if (capability.id) {
-								device.state[capability.id] = state;
-								module.exports.realtime(deviceData, capability.id, state);
-							}
-							if (capability.onResult) {
-								capability.onResult(err, state);
-							}
-						});
+						if (capability.id) {
+							device.state[capability.id] = state;
+							this.realtime(deviceData, capability.id, state);
+						}
+						if (capability.onResult) {
+							capability.onResult(err, state);
+						}
 					})
 				);
 			};
@@ -179,70 +180,19 @@ class Driver extends events.EventEmitter {
 			}, (err, speaker) => {
 				if (err) return Homey.error(err);
 				device.speaker = speaker;
-				let nextTrackTimeout;
-				let nextTrackCallback;
-				speaker.on('setTrack', (track, callback) => {
-					device.lastTrack = undefined;
-					console.log('set track', track);
-					const play = () => {
-						switch (track.format) {
-							case 'spotify:track:id':
-								this._playSpotify(device, track.stream_url, Boolean(track.delay), () => {
-									device.sonos.currentTrack((err, currentTrack) => {
-										console.log('got spotify track info', err, currentTrack);
-										module.exports.realtime(deviceData, 'speaker_playing', true);
-										speaker.updateState(currentTrack);
-										callback(err, !err);
-										device.sonos.currentTrack((err, currTrack) => {
-											if (currTrack) {
-												device.lastTrack = currTrack;
-												device.speaker.updateState({ position: currTrack.position });
-											}
-										});
-									});
-								});
-								break;
-							default:
-								this._playUrl(device, track, Boolean(track.delay), () => {
-									device.sonos.currentTrack((err, currentTrack) => {
-										console.log('got track info', err, currentTrack);
-										module.exports.realtime(deviceData, 'speaker_playing', true);
-										speaker.updateState(currentTrack);
-										callback(err, !err);
-										device.sonos.currentTrack((err, currTrack) => {
-											if (currTrack) {
-												device.lastTrack = currTrack;
-												device.speaker.updateState({ position: currTrack.position });
-											}
-										});
-									});
-								});
-						}
-					};
-					if (nextTrackCallback) {
-						nextTrackCallback(new Error('setTrack debounced'));
-						nextTrackCallback = null;
-						clearTimeout(nextTrackTimeout);
-					}
-					if (track.delay) {
-						nextTrackTimeout = setTimeout(() => {
-							nextTrackCallback = null;
-							play();
-						}, track.delay);
-					} else {
-						play();
-					}
-				});
+				speaker.on('setTrack', this._setTrack.bind(this, device));
 				speaker.on('setPosition', (position, callback) => {
-					console.log('set position', position);
 					device.sonos.seek(Math.round(position / 1000), callback);
 				});
 				speaker.on('setActive', (isActive, callback) => {
-					console.log('active state changed to ', isActive);
 					device.isActiveSpeaker = isActive;
 					return callback();
 				});
 			});
+
+			// device.sonos.getMusicLibrary('sonos_playlists', {}, console.log.bind(null, 'library'));
+
+			device.sonos.searchMusicLibrary('sonos_playlists', '0:', {}, console.log.bind(null, 'tracks'));
 
 		} else {
 			this.on(`found:${deviceData.sn}`, () => {
@@ -251,11 +201,60 @@ class Driver extends events.EventEmitter {
 		}
 	}
 
-	_playUrl(device, track, delay, callback) {
-		if (typeof delay === 'function') {
-			callback = delay;
-			delay = 0;
+	_setTrack(device, data, cb) {
+		const track = data.track;
+		const callback = (err, result) => {
+			device.trackQueued = false;
+			cb(err, result);
+		};
+		device.trackQueued = Boolean(data.opts.delay);
+		device.lastTrack = undefined;
+		console.log('set track', track);
+		const play = () => {
+			this.realtime(device.deviceData, 'speaker_playing', false);
+			switch (track.format) {
+				case 'spotify:track:id':
+					this._playSpotify(device, track.stream_url, data.opts, () => {
+						device.sonos.currentTrack((err, currentTrack) => {
+							console.log('got spotify track info', err, currentTrack);
+							if (err) return callback(err);
+							device.lastTrack = currentTrack;
+							this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
+							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: currentTrack });
+							callback(null, true);
+						});
+					});
+					break;
+				default:
+					this._playUrl(device, track, data.opts, () => {
+						device.sonos.currentTrack((err, currentTrack) => {
+							console.log('got track info', err, currentTrack);
+							if (err) return callback(err);
+							device.lastTrack = currentTrack;
+							this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
+							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: currentTrack });
+							callback(null, true);
+						});
+					});
+			}
+		};
+		if (device.nextTrackCallback) {
+			device.nextTrackCallback(new Error('setTrack debounced'));
+			device.nextTrackCallback = null;
+			clearTimeout(device.nextTrackTimeout);
 		}
+		if (data.opts.delay) {
+			device.nextTrackCallback = callback;
+			device.nextTrackTimeout = setTimeout(() => {
+				device.nextTrackCallback = null;
+				play();
+			}, data.opts.delay);
+		} else {
+			play();
+		}
+	}
+
+	_playUrl(device, track, opts, callback) {
 		const albumArt = track.artwork ? track.artwork.medium || track.artwork.large || track.artwork.small : null;
 		const duration = track.duration ? `${Math.floor(track.duration / 3600000)
 			}:${`0${Math.floor((track.duration % 3600000) / 60000)}`.slice(-2)
@@ -279,49 +278,59 @@ class Driver extends events.EventEmitter {
 			'</DIDL-Lite>',
 		};
 
-		if (delay) {
-			device.sonos.queue(uri, (err, result) => {
-				console.log('queueNext', err, result);
-				callback(err, result);
-			});
-		} else {
-			device.sonos.flush(err => {
-				if (err) return console.log('flush err') & callback(err);
-				device.sonos.selectQueue(err => {
-					if (err) return console.log('selectQueue err') & callback(err);
+		// if (delay) {
+		// 	device.sonos.queue(uri, (err, result) => {
+		// 		console.log('queueNext', err, result);
+		// 		callback(err, result);
+		// 	});
+		// } else {
+		device.sonos.flush(err => {
+			if (err) return console.log('flush err') & callback(err);
+			device.sonos.selectQueue(err => {
+				if (err) return console.log('selectQueue err') & callback(err);
 
+				if (opts.startPlaying) {
 					device.sonos.play(uri, (err, result) => {
 						console.log('play', err, result);
 						callback(err, result);
 					});
-				});
+				} else {
+					device.sonos.queue(uri, (err, queueResult) => {
+						if (err || !queueResult || queueResult.length < 0 || !queueResult[0].FirstTrackNumberEnqueued) {
+							return callback(err);
+						}
+						const selectTrackNum = queueResult[0].FirstTrackNumberEnqueued[0];
+						device.sonos.selectTrack(selectTrackNum, callback);
+					});
+				}
 			});
-		}
+		});
+		// }
 	}
 
-	_playSpotify(device, trackId, delay, callback) {
-		if (typeof delay === 'function') {
-			callback = delay;
-			delay = false;
-		}
-		if (delay) {
-			device.sonos.addSpotifyQueue(trackId, (err, result) => {
-				console.log('addSpotifyQueue 2', err, result);
-				callback(err, result);
-			});
-		} else {
-			device.sonos.selectQueue(err => {
-				if (err) return console.log('selectQueue err') & callback(err);
-				device.sonos.flush(err => {
+	_playSpotify(device, trackId, opts, callback) {
+		// if (opts.delay) {
+		// 	device.sonos.addSpotifyQueue(trackId, (err, result) => {
+		// 		console.log('addSpotifyQueue 2', err, result);
+		// 		callback(err, result);
+		// 	});
+		// } else {
+		device.sonos.selectQueue(err => {
+			if (err) return console.log('selectQueue err') & callback(err);
+			device.sonos.flush(err => {
+				if (err) return callback(err);
+				device.sonos.addSpotifyQueue(trackId, (err, result) => {
+					console.log('addSpotifyQueue', err, result);
 					if (err) return callback(err);
-					device.sonos.addSpotifyQueue(trackId, (err, result) => {
-						console.log('addSpotifyQueue', err, result);
-						if (err) return callback(err);
+					if (opts.startPlaying) {
 						device.sonos.play(callback);
-					});
+					} else {
+						callback(null, true);
+					}
 				});
 			});
-		}
+		});
+		// }
 	}
 
 	_playSoundCloud(device, trackId, callback) {
@@ -334,16 +343,16 @@ class Driver extends events.EventEmitter {
 		});
 	}
 
-	_compareTrack(device) {
+	_compareTrack(device, callback) {
 		device.sonos.currentTrack((err, track) => {
-			if (err) return;
+			if (err) return callback(err);
 			if (device.isActiveSpeaker && device.lastTrack) {
 				const diffProp = Object.keys(track).find((trackProp) =>
 					trackProp !== 'position' && device.lastTrack[trackProp] !== track[trackProp]
 				);
 				if (diffProp) {
 					console.log('Property', diffProp, 'is not equal to lastTrack');
-					if (device.lastTrack.strikes >= 2) {
+					if (device.lastTrack.strikes > 2) {
 						console.log('your out');
 						return device.speaker.updateState(new Error('Track not in sync with Homey'));
 					}
@@ -351,9 +360,18 @@ class Driver extends events.EventEmitter {
 					device.lastTrack.strikes = (device.lastTrack.strikes || 0) + 1;
 					return;
 				}
-				console.log('correct, updating position', track.position);
-				device.lastTrack.strikes = undefined;
-				device.speaker.updateState({ position: track.position });
+				device.lastTrack.strikes = 0;
+				if (!(track.position === 0 && track.duration - device.lastPos <= 10)) {
+					console.log('correct, updating position', track.position * 1000);
+					device.speaker.updateState({ position: track.position * 1000 });
+					device.sonos.getCurrentState((err, state) => {
+						if (err) return callback(err);
+						this.realtime(device.deviceData, 'speaker_playing', state === 'playing');
+						callback();
+					});
+				} else {
+					callback();
+				}
 			}
 		});
 	}
@@ -435,13 +453,18 @@ class Driver extends events.EventEmitter {
 		if (value === true) {
 			device.sonos.play((err) => {
 				if (err) return callback(err);
-				module.exports.realtime(deviceData, 'speaker_playing', value);
+				this.realtime(deviceData, 'speaker_playing', value);
 				return callback(null, value);
 			});
 		} else {
+			if (device.nextTrackCallback) {
+				device.nextTrackCallback(new Error('setTrack debounced'));
+				device.nextTrackCallback = null;
+				clearTimeout(device.nextTrackTimeout);
+			}
 			device.sonos.pause((err) => {
 				if (err) return callback(err);
-				module.exports.realtime(deviceData, 'speaker_playing', value);
+				this.realtime(deviceData, 'speaker_playing', value);
 				return callback(null, value);
 			});
 		}
@@ -490,7 +513,7 @@ class Driver extends events.EventEmitter {
 		device.sonos.setVolume(value * 100, (err) => {
 			if (err) return callback(err);
 
-			module.exports.realtime(deviceData, 'volume_set', value);
+			this.realtime(deviceData, 'volume_set', value);
 			return callback(null, value);
 		});
 
@@ -518,7 +541,7 @@ class Driver extends events.EventEmitter {
 		device.sonos.setMuted(value, (err) => {
 			if (err) return callback(err);
 
-			module.exports.realtime(deviceData, 'volume_mute', value);
+			this.realtime(deviceData, 'volume_mute', value);
 			return callback(null, value);
 		});
 
