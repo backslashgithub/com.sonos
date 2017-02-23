@@ -323,6 +323,7 @@ class Driver extends events.EventEmitter {
 	_setTrack(device, data, cb) {
 		const track = data.track;
 		const callback = (err, result) => {
+			console.log('SETTRACK RESULT', err, result);
 			device.trackQueued = false;
 			cb(err, result);
 		};
@@ -522,7 +523,7 @@ class Driver extends events.EventEmitter {
 					console.log('Property', diffProp, 'is not equal to lastTrack');
 					if (device.lastTrack.strikes > 2) {
 						console.log('your out');
-						return device.speaker.updateState(new Error('Track not in sync with Homey'));
+						return device.speaker.setInactive(new Error('Track not in sync with Homey'));
 					}
 					console.log('strike');
 					device.lastTrack.strikes = (device.lastTrack.strikes || 0) + 1;
