@@ -19,16 +19,21 @@ const icons = [
  * @param  {String} str
  * @return {String}
  */
-const htmlEntities = function (str) {
+function htmlEntities(str) {
 	return String(str)
 		.replace(/&(?!#?[a-z0-9]+;)/g, '&amp;')
 		.replace(/</g, '&lt;')
 		.replace(/>/g, '&gt;')
 		.replace(/"/g, '&quot;');
-};
+}
+
+function parseUri(str) {
+	return encodeURIComponent(str).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
+}
+
+const getIdFromPlaylistUri = new RegExp(/#(\d*)/);
 
 class Driver extends events.EventEmitter {
-
 	constructor() {
 		super();
 
@@ -73,6 +78,7 @@ class Driver extends events.EventEmitter {
 
 	}
 
+
 	/*
 	 Helper methods
 	 */
@@ -88,9 +94,11 @@ class Driver extends events.EventEmitter {
 	_onInit(devicesData, callback) {
 
 		devicesData.forEach(this._initDevice.bind(this));
+		this._initPlayer();
 
 		callback();
 	}
+
 
 	_search() {
 		sonos.search((device) => {
@@ -102,6 +110,116 @@ class Driver extends events.EventEmitter {
 
 				this.emit(`found:${info.serialNum}`);
 			});
+		});
+	}
+
+	_initPlayer() {
+		this.playlistInitLock = true;
+		setTimeout(() => {
+			this.playlistInitLock = false;
+			if (!this.playlistsReturned) {
+				Homey.manager('media').requestPlaylistsUpdate();
+			}
+		}, 10000);
+
+		if (this._devices.length) {
+			Homey.manager('media').requestPlaylistsUpdate();
+		}
+
+		this.on('device_inited', () => {
+			if (this._devices.length === 1 || !this.playlistsReturned) {
+				Homey.manager('media').requestPlaylistsUpdate();
+			}
+		});
+
+		/*
+		 * Respond to a play request by returning a parsed track object.
+		 * The request object contains a trackId and a format property to indicate what specific
+		 * resource and in what format is wanted for playback.
+		 */
+		Homey.manager('media').on('play', (request, callback) => {
+			callback(null, { stream_url: request.trackId });
+		});
+
+		/*
+		 * Homey can periodically request static playlist that are available through
+		 * the streaming API (when applicable)
+		 */
+		Homey.manager('media').on('getPlaylists', this._getPlaylists.bind(this));
+
+		/*
+		 * Homey might request a specific playlist so it can be refreshed
+		 */
+		Homey.manager('media').on('getPlaylist', this._getPlaylists.bind(this));
+	}
+
+	_getPlaylists(data, callback) {
+		const playlistFilterId = data ? data.playlistId : null;
+		console.log('getPlaylists');
+		const device = this._getDevice();
+		if (device instanceof Error) {
+			if (!this.playlistsReturned && this.playlistInitLock) {
+				return callback(new Error('Driver not in sync'))
+			}
+			return callback(null, []);
+		}
+
+		device.sonos.getMusicLibrary('sonos_playlists', {}, (err, playlists) => {
+			if (err) return err;
+			Promise.all(
+				playlists.items.map(playlist =>
+					new Promise((resolve, reject) => {
+						const playlistId = (getIdFromPlaylistUri.exec(playlist.uri) || [])[1];
+						if (
+							(playlistId === '' || playlistId === undefined) ||
+							(typeof playlistFilterId === 'string' && playlistId !== playlistFilterId)
+						) {
+							return resolve([]);
+						}
+						device.sonos.searchMusicLibrary('sonos_playlists', playlistId, {}, (err, tracks) => {
+							if (err) return reject(err);
+							resolve(this._parsePlaylist(device, playlist, playlistId, tracks.items));
+						});
+					})
+				)
+			).then((result) => {
+				result = Array.prototype.concat.apply([], result);
+				if (playlistFilterId) {
+					result = result[0];
+				}
+
+				callback(null, result);
+				this.playlistsReturned = true;
+			}).catch(callback);
+		});
+	}
+
+	_parsePlaylist(device, playlist, playlistId, tracks) {
+		return {
+			type: 'playlist',
+			id: playlistId,
+			title: playlist.title,
+			tracks: this._parseTracks(device, playlistId, tracks),
+		};
+	}
+
+	_parseTracks(device, playlistId, tracks) {
+		if (!tracks) return [];
+		const hostname = `http://${device.port}:${device.host}`;
+
+		return tracks.map(track => {
+			const albumArtURL = track.albumArtURL[0] === '/' ? track.albumArtUrl : hostname + track.albumArtURL;
+			return {
+				type: 'track',
+				id: `SQ:${playlistId}!${track.uri}`,
+				duration: track.duration * 1000,
+				title: track.title,
+				artist: [{ type: 'artist', name: track.artist }],
+				album: track.album,
+				artwork: { small: albumArtURL, medium: albumArtURL, large: albumArtURL },
+				codecs: ['sonos:track:uri'],
+				confidence: 0.5,
+			};
 		});
 	}
 
@@ -176,7 +294,7 @@ class Driver extends events.EventEmitter {
 
 
 			this.registerSpeaker(deviceData, {
-				codecs: ['spotify:track:id', 'homey:codec:mp3'],
+				codecs: ['homey:codec:mp3', 'sonos:track:uri', 'spotify:track:id'],
 			}, (err, speaker) => {
 				if (err) return Homey.error(err);
 				device.speaker = speaker;
@@ -191,9 +309,10 @@ class Driver extends events.EventEmitter {
 			});
 
 			// device.sonos.getMusicLibrary('sonos_playlists', {}, console.log.bind(null, 'library'));
+			//
+			// device.sonos.searchMusicLibrary('sonos_playlists', '0', {}, console.log.bind(null, 'tracks'));
 
-			device.sonos.searchMusicLibrary('sonos_playlists', '0:', {}, console.log.bind(null, 'tracks'));
-
+			this.emit('device_inited', device);
 		} else {
 			this.on(`found:${deviceData.sn}`, () => {
 				this._initDevice(deviceData);
@@ -212,7 +331,22 @@ class Driver extends events.EventEmitter {
 		console.log('set track', track);
 		const play = () => {
 			this.realtime(device.deviceData, 'speaker_playing', false);
-			switch (track.format) {
+			switch (track.codec) {
+				case 'sonos:track:uri':
+					this._playSonosUri(device, track, data.opts, () => {
+						device.sonos.currentTrack((err, currentTrack) => {
+							console.log('got track info', err, currentTrack);
+							if (err) return callback(err);
+							device.lastTrack = currentTrack;
+							this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
+							if (!track.duration) {
+								track.duration = currentTrack.duration * 1000;
+							}
+							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: track });
+							callback(null, true);
+						});
+					});
+					break;
 				case 'spotify:track:id':
 					this._playSpotify(device, track.stream_url, data.opts, () => {
 						device.sonos.currentTrack((err, currentTrack) => {
@@ -220,7 +354,7 @@ class Driver extends events.EventEmitter {
 							if (err) return callback(err);
 							device.lastTrack = currentTrack;
 							this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
-							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: currentTrack });
+							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: track });
 							callback(null, true);
 						});
 					});
@@ -232,7 +366,10 @@ class Driver extends events.EventEmitter {
 							if (err) return callback(err);
 							device.lastTrack = currentTrack;
 							this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
-							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: currentTrack });
+							if (!track.duration) {
+								track.duration = currentTrack.duration * 1000;
+							}
+							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: track });
 							callback(null, true);
 						});
 					});
@@ -270,14 +407,45 @@ class Driver extends events.EventEmitter {
 			`<upnp:artist role="Performer">${
 			((track.artist || []).find(artist => artist.type === 'artist') || {}).name || ''}</upnp:artist>` +
 			`<upnp:album>${track.album || ''}</upnp:album>` +
-			`<dc:date>${track.release_date || '' /* TODO */}</dc:date>` +
-			`<upnp:genre>${track.genre || ''}</upnp:genre>` +
+			(track.release_date ? `<dc:date>${track.release_date /* TODO */}</dc:date>` : '') +
+			(track.genre ? `<upnp:genre>${track.genre}</upnp:genre>` : '') +
 			(albumArt ? `<upnp:albumArtURI>${albumArt}</upnp:albumArtURI>` : '') +
 			'<upnp:class>object.item.audioItem.musicTrack</upnp:class>' +
 			'</item>' +
 			'</DIDL-Lite>',
 		};
 
+		this._playUri(device, uri, opts, callback);
+	}
+
+	_playSonosUri(device, track, opts, callback) {
+		const albumArt = track.artwork ? track.artwork.medium || track.artwork.large || track.artwork.small : null;
+		const duration = track.duration ? `${Math.floor(track.duration / 3600000)
+			}:${`0${Math.floor((track.duration % 3600000) / 60000)}`.slice(-2)
+			}:${`0${Math.round((track.duration % 60000) / 1000)}`.slice(-2)}` : null;
+		const artist = ((track.artist || []).find(entry => entry.type === 'artist') || {}).name || '';
+		const trackUri = track.stream_url.split('!');
+		console.log('sending', `${trackUri[0]}/${parseUri(trackUri[1])}:A${parseUri(track.title)},${parseUri(artist)},${parseUri(track.album)},${Math.round(track.duration / 1000)}`);
+		const uri = {
+			uri: htmlEntities(trackUri[1]),
+			metadata: '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" ' +
+			'xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" ' +
+			'xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">' +
+			`<item id="${trackUri[0]}/${parseUri(trackUri[1])}:A${parseUri(track.title)},${parseUri(artist)},${parseUri(track.album)},${Math.round(track.duration / 1000)}" parentId="${trackUri[0]}" restricted="true">` +
+			`<res duration="${duration}"></res>` +
+			`<dc:title>${track.title || track.stream_url}</dc:title>` +
+			`<upnp:album>${track.album || ''}</upnp:album>` +
+			'<upnp:class>object.item.audioItem.musicTrack</upnp:class>' +
+			'<desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">RINCON_AssociatedZPUDN</desc>' +
+			'</item>' +
+			'</DIDL-Lite>',
+		};
+
+		console.log('playUri');
+		this._playUri(device, uri, opts, callback);
+	}
+
+	_playUri(device, uri, opts, callback) {
 		// if (delay) {
 		// 	device.sonos.queue(uri, (err, result) => {
 		// 		console.log('queueNext', err, result);
@@ -377,12 +545,16 @@ class Driver extends events.EventEmitter {
 	}
 
 	_uninitDevice(deviceData) {
-		clearInterval(this._devices[deviceData.sn].pollInterval);
+		const device = this._getDevice(deviceData);
+		clearInterval(device.pollInterval);
+		if (device.speaker) {
+			this.unregisterSpeaker(deviceData);
+		}
 		this.log('_uninitDevice', deviceData);
 	}
 
 	_getDevice(deviceData) {
-		return this._devices[deviceData.sn] || new Error('invalid_device');
+		return (deviceData ? this._devices[deviceData.sn] : this._devices[Object.keys(this._devices).shift()]) || new Error('invalid_device');
 	}
 
 	/*
@@ -429,6 +601,10 @@ class Driver extends events.EventEmitter {
 	_onDeleted(deviceData) {
 		this.log('_onDeleted', deviceData);
 		this._uninitDevice(deviceData);
+		delete this._devices[deviceData.sn];
+		if (this._devices.length === 0) {
+			Homey.manager('media').requestPlaylistsUpdate();
+		}
 	}
 
 	/*
@@ -453,7 +629,6 @@ class Driver extends events.EventEmitter {
 		if (value === true) {
 			device.sonos.play((err) => {
 				if (err) return callback(err);
-				this.realtime(deviceData, 'speaker_playing', value);
 				return callback(null, value);
 			});
 		} else {
@@ -464,7 +639,6 @@ class Driver extends events.EventEmitter {
 			}
 			device.sonos.pause((err) => {
 				if (err) return callback(err);
-				this.realtime(deviceData, 'speaker_playing', value);
 				return callback(null, value);
 			});
 		}
@@ -513,7 +687,6 @@ class Driver extends events.EventEmitter {
 		device.sonos.setVolume(value * 100, (err) => {
 			if (err) return callback(err);
 
-			this.realtime(deviceData, 'volume_set', value);
 			return callback(null, value);
 		});
 
@@ -541,7 +714,6 @@ class Driver extends events.EventEmitter {
 		device.sonos.setMuted(value, (err) => {
 			if (err) return callback(err);
 
-			this.realtime(deviceData, 'volume_mute', value);
 			return callback(null, value);
 		});
 

@@ -17,6 +17,7 @@
 		"large": "/assets/images/large.png",
 		"small": "/assets/images/small.png"
 	},
+	"media": [ "play", "getPlaylists", "getPlaylist" ],
 	"drivers": [
 		{
 			"id": "sonos",
