@@ -1,7 +1,7 @@
 # Sonos
 This app adds support for Sonos devices, e.g. Play/Pause, Previous, Next, Mute/Unmute & Volume control.
 
-# Media
+# Media (compatible with Homey v1.2.0 and higher)
 Sonos now also supports Homey Media! This makes it possible to play playlists from Homey Media to the Sonos. 
 Features of this app in combination with Homey Media include:
 Play a Sonos playlist on Sonos
