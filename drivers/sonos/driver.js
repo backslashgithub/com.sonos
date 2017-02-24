@@ -138,7 +138,7 @@ class Driver extends events.EventEmitter {
 		 * resource and in what format is wanted for playback.
 		 */
 		Homey.manager('media').on('play', (request, callback) => {
-			callback(null, { stream_url: request.trackId });
+			callback(null, { stream_url: new Buffer(request.trackId, 'base64').toString('ascii') });
 		});
 
 		/*
@@ -176,7 +176,7 @@ class Driver extends events.EventEmitter {
 						) {
 							return resolve([]);
 						}
-						device.sonos.searchMusicLibrary('sonos_playlists', playlistId, {}, (err, tracks) => {
+						device.sonos.searchMusicLibrary('sonos_playlists', playlistId, { total: 1000 }, (err, tracks) => {
 							if (err) return reject(err);
 							resolve(this._parsePlaylist(device, playlist, playlistId, tracks.items));
 						});
@@ -205,13 +205,13 @@ class Driver extends events.EventEmitter {
 
 	_parseTracks(device, playlistId, tracks) {
 		if (!tracks) return [];
-		const hostname = `http://${device.port}:${device.host}`;
+		const hostname = `http://${device.sonos.host}:${device.sonos.port}`;
 
 		return tracks.map(track => {
-			const albumArtURL = track.albumArtURL[0] === '/' ? track.albumArtUrl : hostname + track.albumArtURL;
+			const albumArtURL = track.albumArtURL[0] === '/' ? hostname + track.albumArtURL : track.albumArtURL;
 			return {
 				type: 'track',
-				id: `SQ:${playlistId}!${track.uri}`,
+				id: new Buffer(`SQ:${playlistId}!${track.uri}`).toString('base64'),
 				duration: track.duration * 1000,
 				title: track.title,
 				artist: [{ type: 'artist', name: track.artist }],
@@ -332,19 +332,21 @@ class Driver extends events.EventEmitter {
 		};
 		device.trackQueued = Boolean(data.opts.delay);
 		device.lastTrack = undefined;
-		console.log('set track', track);
+		console.log('set track', data);
 
-		const getCurrTrack = device.sonos.currentTrack((err, currentTrack) => {
-			console.log('got track info', err, currentTrack);
-			if (err) return callback(err);
-			device.lastTrack = currentTrack;
-			this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
-			if (!track.duration) {
-				track.duration = currentTrack.duration * 1000;
-			}
-			device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: track });
-			callback(null, true);
-		});
+		const getCurrTrack = () => {
+			device.sonos.currentTrack((err, currentTrack) => {
+				console.log('got track info', err, currentTrack);
+				if (err) return callback(err);
+				device.lastTrack = currentTrack;
+				this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
+				if (!track.duration) {
+					track.duration = currentTrack.duration * 1000;
+				}
+				device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: track });
+				callback(null, true);
+			});
+		};
 
 		const setPosition = () => {
 			if (data.opts.position) {
