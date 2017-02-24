@@ -2,6 +2,7 @@
 
 const events = require('events');
 const sonos = require('sonos');
+const connectionMap = new Map();
 
 const icons = [
 	'S1', // Play:1
@@ -29,6 +30,16 @@ function htmlEntities(str) {
 
 function parseUri(str) {
 	return encodeURIComponent(str).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
+}
+
+const urlParser = /^http:\/\/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}):([0-9]{1,5})/i;
+function parseUrl(url) {
+	const match = urlParser.exec(url);
+	if (!match) return false;
+	return {
+		host: match[1],
+		port: match[2],
+	}
 }
 
 const getIdFromPlaylistUri = new RegExp(/#(\d*)/);
@@ -120,7 +131,7 @@ class Driver extends events.EventEmitter {
 			if (!this.playlistsReturned) {
 				Homey.manager('media').requestPlaylistsUpdate();
 			}
-		}, 10000);
+		}, 20000);
 
 		if (this._devices.length) {
 			Homey.manager('media').requestPlaylistsUpdate();
@@ -159,7 +170,7 @@ class Driver extends events.EventEmitter {
 		const device = this._getDevice();
 		if (device instanceof Error) {
 			if (!this.playlistsReturned && this.playlistInitLock) {
-				return callback(new Error('Driver not in sync'))
+				return callback(new Error('Driver not in sync'));
 			}
 			return callback(null, []);
 		}
@@ -234,14 +245,21 @@ class Driver extends events.EventEmitter {
 				clearInterval(this._devices[deviceData.sn].pollInterval);
 			}
 
+			const conn = this._getConnection(searchResult);
+
 			const device = {
-				sonos: new sonos.Sonos(searchResult.host, searchResult.port),
+				_sonos: conn,
+				sonos: conn,
 				state: {
 					speaker_playing: false,
 				},
 				deviceData,
 			};
 			this._devices[deviceData.sn] = device;
+
+			this._syncSonosMasterNodes(device);
+
+			device.sonos.getTopology(console.log.bind(null, 'topology'));
 
 
 			setTimeout(() => this.realtime(deviceData, 'speaker_playing', false), 1000);
@@ -323,6 +341,56 @@ class Driver extends events.EventEmitter {
 		}
 	}
 
+	_getConnection(location) {
+		const connKey = location.host + location.port;
+		return connectionMap.has(connKey) ?
+			connectionMap.get(connKey) :
+			connectionMap.set(connKey, new sonos.Sonos(location.host, location.port)).get(connKey);
+	}
+
+	_syncSonosMasterNodes() {
+		const syncMasterNodes = () => {
+			const deviceId = Object.keys(this._devices)[0];
+			if (!deviceId) return;
+			this._devices[deviceId].sonos.getTopology((err, topology) => {
+				if (err) return;
+
+				const coordinators = {};
+				const groups = topology.zones.map(zone => {
+					const group = {
+						coordinator: zone.coordinator,
+						group: zone.group,
+						location: parseUrl(zone.location),
+					};
+					if (!group.location) return null;
+					group.device = this._devices[Object.keys(this._devices)
+						.find(key =>
+							this._devices[key].sonos.host === device.location.host &&
+							this._devices[key].sonos.port === device.location.port
+						)];
+					if (group.coordinator) {
+						coordinators[group.group] = group;
+					}
+					return group;
+				});
+
+				groups.forEach(group => {
+					if (!(group && group.device)) return;
+					const conn = this._getConnection(coordinators[group.group].location);
+					group.device.sonos = conn;
+					if (group.device._sonos.host !== conn.host) {
+						console.log('set alternative connection for device', group.device, conn);
+					}
+				});
+			});
+		};
+		syncMasterNodes();
+		if (this._syncMasterNodesInterval) {
+			clearInterval(this._syncMasterNodesInterval);
+		}
+		this._syncMasterNodesInterval = setInterval(syncMasterNodes, 5000);
+	}
+
 	_setTrack(device, data, cb) {
 		const track = data.track;
 		const callback = (err, result) => {
@@ -330,8 +398,11 @@ class Driver extends events.EventEmitter {
 			device.trackQueued = false;
 			cb(err, result);
 		};
-		device.trackQueued = Boolean(data.opts.delay);
 		device.lastTrack = undefined;
+		if (track.player_uri === 'homey:app:com.google.music') {
+			return callback(new Error('Unable to play google play music tracks'));
+		}
+		device.trackQueued = Boolean(data.opts.delay);
 		console.log('set track', data);
 
 		const getCurrTrack = () => {
