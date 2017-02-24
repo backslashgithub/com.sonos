@@ -300,11 +300,14 @@ class Driver extends events.EventEmitter {
 				device.speaker = speaker;
 				speaker.on('setTrack', this._setTrack.bind(this, device));
 				speaker.on('setPosition', (position, callback) => {
-					device.sonos.seek(Math.round(position / 1000), callback);
+					device.sonos.seek(Math.round(position / 1000), (err, result) => {
+						if(err) return callback(err);
+						callback(null, position);
+					});
 				});
 				speaker.on('setActive', (isActive, callback) => {
 					device.isActiveSpeaker = isActive;
-					return callback();
+					return callback(null, isActive);
 				});
 			});
 
@@ -687,6 +690,7 @@ class Driver extends events.EventEmitter {
 
 		device.sonos.setVolume(value * 100, (err) => {
 			if (err) return callback(err);
+			device.sonos.setMuted(false, () => this.realtime(deviceData, 'volume_mute', false));
 
 			return callback(null, value);
 		});
