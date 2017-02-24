@@ -502,7 +502,6 @@ class Driver extends events.EventEmitter {
 			}:${`0${Math.round((track.duration % 60000) / 1000)}`.slice(-2)}` : null;
 		const artist = ((track.artist || []).find(entry => entry.type === 'artist') || {}).name || '';
 		const trackUri = track.stream_url.split('!');
-		console.log('sending', `${trackUri[0]}/${parseUri(trackUri[1])}:A${parseUri(track.title)},${parseUri(artist)},${parseUri(track.album)},${Math.round(track.duration / 1000)}`);
 		const uri = {
 			uri: htmlEntities(trackUri[1]),
 			metadata: '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" ' +
@@ -518,7 +517,6 @@ class Driver extends events.EventEmitter {
 			'</DIDL-Lite>',
 		};
 
-		console.log('playUri');
 		this._playUri(device, uri, opts, callback);
 	}
 
