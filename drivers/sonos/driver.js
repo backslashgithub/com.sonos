@@ -301,7 +301,7 @@ class Driver extends events.EventEmitter {
 				speaker.on('setTrack', this._setTrack.bind(this, device));
 				speaker.on('setPosition', (position, callback) => {
 					device.sonos.seek(Math.round(position / 1000), (err, result) => {
-						if(err) return callback(err);
+						if (err) return callback(err);
 						callback(null, position);
 					});
 				});
@@ -333,49 +333,49 @@ class Driver extends events.EventEmitter {
 		device.trackQueued = Boolean(data.opts.delay);
 		device.lastTrack = undefined;
 		console.log('set track', track);
+
+		const getCurrTrack = device.sonos.currentTrack((err, currentTrack) => {
+			console.log('got track info', err, currentTrack);
+			if (err) return callback(err);
+			device.lastTrack = currentTrack;
+			this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
+			if (!track.duration) {
+				track.duration = currentTrack.duration * 1000;
+			}
+			device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: track });
+			callback(null, true);
+		});
+
+		const setPosition = () => {
+			if (data.opts.position) {
+				device.sonos.seek(Math.round(data.opts.position / 1000), (err) => {
+					if (err) return callback(err);
+					getCurrTrack();
+				});
+			} else {
+				getCurrTrack();
+			}
+		};
+
 		const play = () => {
 			this.realtime(device.deviceData, 'speaker_playing', false);
 			switch (track.codec) {
 				case 'sonos:track:uri':
-					this._playSonosUri(device, track, data.opts, () => {
-						device.sonos.currentTrack((err, currentTrack) => {
-							console.log('got track info', err, currentTrack);
-							if (err) return callback(err);
-							device.lastTrack = currentTrack;
-							this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
-							if (!track.duration) {
-								track.duration = currentTrack.duration * 1000;
-							}
-							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: track });
-							callback(null, true);
-						});
+					this._playSonosUri(device, track, data.opts, (err) => {
+						if (err) return callback(err);
+						setPosition();
 					});
 					break;
 				case 'spotify:track:id':
-					this._playSpotify(device, track.stream_url, data.opts, () => {
-						device.sonos.currentTrack((err, currentTrack) => {
-							console.log('got spotify track info', err, currentTrack);
-							if (err) return callback(err);
-							device.lastTrack = currentTrack;
-							this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
-							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: track });
-							callback(null, true);
-						});
+					this._playSpotify(device, track.stream_url, data.opts, (err) => {
+						if (err) return callback(err);
+						setPosition();
 					});
 					break;
 				default:
-					this._playUrl(device, track, data.opts, () => {
-						device.sonos.currentTrack((err, currentTrack) => {
-							console.log('got track info', err, currentTrack);
-							if (err) return callback(err);
-							device.lastTrack = currentTrack;
-							this.realtime(device.deviceData, 'speaker_playing', data.opts.startPlaying);
-							if (!track.duration) {
-								track.duration = currentTrack.duration * 1000;
-							}
-							device.speaker.updateState({ position: (currentTrack || {}).position * 1000, track: track });
-							callback(null, true);
-						});
+					this._playUrl(device, track, data.opts, (err) => {
+						if (err) return callback(err);
+						setPosition();
 					});
 			}
 		};
