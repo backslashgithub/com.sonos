@@ -39,7 +39,7 @@ function parseUrl(url) {
 	return {
 		host: match[1],
 		port: match[2],
-	}
+	};
 }
 
 const getIdFromPlaylistUri = new RegExp(/#(\d*)/);
@@ -219,7 +219,8 @@ class Driver extends events.EventEmitter {
 		const hostname = `http://${device.sonos.host}:${device.sonos.port}`;
 
 		return tracks.map(track => {
-			const albumArtURL = track.albumArtURL[0] === '/' ? hostname + track.albumArtURL : track.albumArtURL;
+			const albumArtURL = track.albumArtUrl && track.albumArtURL[0] === '/' ? hostname + track.albumArtURL : track.albumArtURL;
+			const artwork = albumArtURL ? { small: albumArtURL, medium: albumArtURL, large: albumArtURL } : undefined;
 			return {
 				type: 'track',
 				id: new Buffer(`SQ:${playlistId}!${track.uri}`).toString('base64'),
@@ -227,7 +228,7 @@ class Driver extends events.EventEmitter {
 				title: track.title,
 				artist: [{ type: 'artist', name: track.artist }],
 				album: track.album,
-				artwork: { small: albumArtURL, medium: albumArtURL, large: albumArtURL },
+				artwork,
 				codecs: ['sonos:track:uri'],
 				confidence: 0.5,
 			};
