@@ -323,6 +323,7 @@ class Driver extends events.EventEmitter {
 				});
 				speaker.on('setActive', (isActive, callback) => {
 					device.isActiveSpeaker = isActive;
+					device.lastTrack = undefined;
 					return callback(null, isActive);
 				});
 			});
