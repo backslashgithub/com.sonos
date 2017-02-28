@@ -355,6 +355,7 @@ class Driver extends events.EventEmitter {
 				if (err) return;
 
 				const coordinators = {};
+				const groupConnections = {};
 				const groups = topology.zones.map(zone => {
 					const group = {
 						coordinator: zone.coordinator,
@@ -370,13 +371,18 @@ class Driver extends events.EventEmitter {
 					if (group.coordinator) {
 						coordinators[group.group] = group;
 					}
+					groupConnections[group.group] = groupConnections[group.group] || [];
+					groupConnections[group.group].push(this._getConnection(group.location));
 					return group;
 				});
 
 				groups.forEach(group => {
-					if (!(group && group.device)) return;
+					if (!group) return;
 					const conn = this._getConnection(coordinators[group.group].location);
-					group.device.sonos = conn;
+					if (group.device) {
+						group.device.sonos = conn;
+						group.device.group = groupConnections[group.group];
+					}
 				});
 			});
 		};
@@ -742,7 +748,7 @@ class Driver extends events.EventEmitter {
 		const device = this._getDevice(deviceData);
 		if (device instanceof Error) return callback(device);
 
-		device.sonos.getVolume((err, volume) => {
+		device._sonos.getVolume((err, volume) => {
 			if (err) return callback(err);
 			return callback(null, volume / 100);
 		});
@@ -755,14 +761,40 @@ class Driver extends events.EventEmitter {
 		const device = this._getDevice(deviceData);
 		if (device instanceof Error) return callback(device);
 
-		device.sonos.setVolume(value * 100, (err) => {
-			if (err) return callback(err);
-			device.sonos.setMuted(false, () => this.realtime(deviceData, 'volume_mute', false));
+		const groupConnections = device.group.filter(conn => conn !== device._sonos);
+		Promise.all(
+			[
+				new Promise((resolve, reject) => device._sonos.getVolume((err, res) => err ? reject(err) : resolve(res))),
+			].concat(groupConnections.map(conn =>
+					new Promise((resolve, reject) => conn.getVolume((err, res) => err ? reject(err) : resolve(res)))
+				)
+			)
+		).then(result => {
+			const curr = result[0];
+			const diff = value * 100 - curr;
+			const change = 1 + ((diff) / curr);
 
-			return callback(null, value);
-		});
+			return Promise.all([
+				new Promise((resolve, reject) =>
+					device._sonos.setVolume(value * 100, (err, res) => {
+						if (err) return callback(err);
+						device.sonos.setMuted(false, () => this.realtime(deviceData, 'volume_mute', false));
 
+						return callback(null, res);
+					})
+				),
+			].concat(groupConnections.map((conn, i) =>
+					new Promise((resolve, reject) =>
+						conn.setVolume(
+							Math.round(result[i + 1] + diff * Math.max(Math.max(result[i + 1], 1) / Math.max(curr, 1), 0.25)),
+							(err, res) => err ? reject(err) : resolve(res)
+						)
+					)
+				)
+			)).then(() => callback(null, value));
+		}).catch(callback);
 	}
+
 
 	_onCapabilityVolumeMuteGet(deviceData, callback) {
 		this.log('_onCapabilityVolumeMuteGet');
