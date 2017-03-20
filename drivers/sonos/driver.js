@@ -260,12 +260,6 @@ class Driver extends events.EventEmitter {
 
 			this._syncSonosMasterNodes(device);
 
-			setTimeout(() => this.realtime(deviceData, 'speaker_playing', false), 1000);
-			setTimeout(() => this.realtime(deviceData, 'speaker_playing', true), 2000);
-			setTimeout(() => this.realtime(deviceData, 'speaker_playing', true), 3000);
-			setTimeout(() => this.realtime(deviceData, 'speaker_playing', true), 4000);
-
-
 			const pollState = () => {
 				[
 					{ fn: this._compareTrack.bind(this, device) },
