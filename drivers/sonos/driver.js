@@ -3,6 +3,7 @@
 const events = require('events');
 const sonos = require('sonos');
 const connectionMap = new Map();
+const logger = require('homey-log').Log;
 
 const icons = [
 	'S1', // Play:1
@@ -75,6 +76,10 @@ class Driver extends events.EventEmitter {
 		this.capabilities.volume_mute = {};
 		this.capabilities.volume_mute.get = this._onCapabilityVolumeMuteGet.bind(this);
 		this.capabilities.volume_mute.set = this._onCapabilityVolumeMuteSet.bind(this);
+
+		Homey.manager('flow')
+			.on('action.group_volume_mute', this._onFlowActionGroupVolumeMute.bind(this))
+			.on('action.group_volume_unmute', this._onFlowActionGroupVolumeUnmute.bind(this));
 
 		this._search();
 	}
@@ -274,6 +279,8 @@ class Driver extends events.EventEmitter {
 			};
 
 			device.pollInterval = setInterval(pollState, 5000);
+
+			logger.setExtra({ devices: this._devices });
 
 			// device.sonos.play({ uri: 'spotify:track:7BKLCZ1jbUBVqRi2FVlTVw' }, console.log.bind(null, 'PLAY'));
 			// this._playUrl(device, {
@@ -779,14 +786,13 @@ class Driver extends events.EventEmitter {
 		}).catch(callback);
 	}
 
-
 	_onCapabilityVolumeMuteGet(deviceData, callback) {
 		this.log('_onCapabilityVolumeMuteGet');
 
 		const device = this._getDevice(deviceData);
 		if (device instanceof Error) return callback(device);
 
-		device.sonos.getMuted((err, muted) => {
+		device._sonos.getMuted((err, muted) => {
 			if (err) return callback(err);
 			return callback(null, muted);
 		});
@@ -799,12 +805,42 @@ class Driver extends events.EventEmitter {
 		const device = this._getDevice(deviceData);
 		if (device instanceof Error) return callback(device);
 
-		device.sonos.setMuted(value, (err) => {
+		device._sonos.setMuted(value, (err) => {
 			if (err) return callback(err);
 
 			return callback(null, value);
 		});
 
+	}
+
+	_onFlowActionGroupVolumeMute(callback, args) {
+		this.log('_onFlowActionGroupVolumeMute', args);
+
+		const device = this._getDevice(args.device);
+		if (device instanceof Error) return callback(device);
+
+		return Promise.all(
+			device.group.map((conn) =>
+				new Promise((resolve, reject) =>
+					conn.setMuted(true, err => err ? reject(err) : resolve())
+				)
+			)
+		).then(() => callback(null, true)).catch(callback);
+	}
+
+	_onFlowActionGroupVolumeUnmute(callback, args) {
+		this.log('_onFlowActionGroupVolumeMute', args);
+
+		const device = this._getDevice(args.device);
+		if (device instanceof Error) return callback(device);
+
+		return Promise.all(
+			device.group.map((conn) =>
+				new Promise((resolve, reject) =>
+					conn.setMuted(false, err => err ? reject(err) : resolve())
+				)
+			)
+		).then(() => callback(null, true)).catch(callback);
 	}
 }
 

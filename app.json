@@ -1,6 +1,6 @@
 {
 	"id": "com.sonos",
-	"version": "2.2.0",
+	"version": "2.2.1",
 	"compatibility": ">=1.2.0",
 	"name": {
 		"en": "Sonos"
@@ -9,7 +9,9 @@
 		"name": "Athom B.V.",
 		"website": "https://www.athom.com"
 	},
-	"category": [ "music" ],
+	"category": [
+		"music"
+	],
 	"description": {
 		"en": "Sonos for Homey"
 	},
@@ -17,7 +19,11 @@
 		"large": "/assets/images/large.png",
 		"small": "/assets/images/small.png"
 	},
-	"media": [ "play", "getPlaylists", "getPlaylist" ],
+	"media": [
+		"play",
+		"getPlaylists",
+		"getPlaylist"
+	],
 	"drivers": [
 		{
 			"id": "sonos",
@@ -29,7 +35,13 @@
 				"small": "/drivers/sonos/assets/images/small.png"
 			},
 			"class": "speaker",
-			"capabilities": [ "speaker_playing", "speaker_prev", "speaker_next", "volume_set", "volume_mute" ],
+			"capabilities": [
+				"speaker_playing",
+				"speaker_prev",
+				"speaker_next",
+				"volume_set",
+				"volume_mute"
+			],
 			"pair": [
 				{
 					"id": "list_devices",
@@ -44,5 +56,41 @@
 				}
 			]
 		}
-	]
+	],
+	"flow": {
+		"actions": [
+			{
+				"id": "group_volume_mute",
+				"title": {
+					"en": "Mute Group"
+				},
+				"args": [
+					{
+						"type": "device",
+						"name": "device",
+						"filter": {
+							"driver_id": "sonos",
+							"capabilities": "volume_mute"
+						}
+					}
+				]
+			},
+			{
+				"id": "group_volume_unmute",
+				"title": {
+					"en": "Unmute Group"
+				},
+				"args": [
+					{
+						"type": "device",
+						"name": "device",
+						"filter": {
+							"driver_id": "sonos",
+							"capabilities": "volume_mute"
+						}
+					}
+				]
+			}
+		]
+	}
 }

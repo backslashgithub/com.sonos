@@ -11,3 +11,9 @@ Play mixed source playlists from Homey Media
 ### Known bugs
 Playback of tracks from the Google Play Music app is not possible with Sonos due to the restricted API's. 
 It is possible to play your Google Play Music tracks on Sonos by creating a Sonos Playlist which Homey can play on your Sonos speaker!
+
+##What's new
+####v2.2.1
+Added Group (Un)Mute flow cards
+Fixed (Un)Mute card muting the main group node instead of the speaker in the flow card
+Fixed crash when Sonos response data was corrupt which occured in some instances
