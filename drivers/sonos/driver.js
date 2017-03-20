@@ -76,17 +76,7 @@ class Driver extends events.EventEmitter {
 		this.capabilities.volume_mute.get = this._onCapabilityVolumeMuteGet.bind(this);
 		this.capabilities.volume_mute.set = this._onCapabilityVolumeMuteSet.bind(this);
 
-		Homey.manager('flow')
-			.on('action.play', this._onFlowActionPlay.bind(this))
-			.on('action.pause', this._onFlowActionPause.bind(this))
-			.on('action.prev', this._onFlowActionPrev.bind(this))
-			.on('action.next', this._onFlowActionNext.bind(this))
-			.on('action.volume_set', this._onFlowActionVolumeSet.bind(this))
-			.on('action.volume_mute', this._onFlowActionVolumeMute.bind(this))
-			.on('action.volume_unmute', this._onFlowActionVolumeUnmute.bind(this));
-
 		this._search();
-
 	}
 
 
@@ -259,12 +249,6 @@ class Driver extends events.EventEmitter {
 			this._devices[deviceData.sn] = device;
 
 			this._syncSonosMasterNodes(device);
-
-			setTimeout(() => this.realtime(deviceData, 'speaker_playing', false), 1000);
-			setTimeout(() => this.realtime(deviceData, 'speaker_playing', true), 2000);
-			setTimeout(() => this.realtime(deviceData, 'speaker_playing', true), 3000);
-			setTimeout(() => this.realtime(deviceData, 'speaker_playing', true), 4000);
-
 
 			const pollState = () => {
 				[
@@ -821,39 +805,6 @@ class Driver extends events.EventEmitter {
 			return callback(null, value);
 		});
 
-	}
-
-	/*
-	 Flow
-	 */
-	_onFlowActionPlay(callback, args) {
-		this._onCapabilitySpeakerPlayingSet(args.device, true, callback);
-	}
-
-	_onFlowActionPause(callback, args) {
-		this._onCapabilitySpeakerPlayingSet(args.device, false, callback);
-	}
-
-	_onFlowActionPrev(callback, args) {
-		this._onCapabilitySpeakerPrevSet(args.device, true, callback);
-	}
-
-	_onFlowActionNext(callback, args) {
-		this._onCapabilitySpeakerNextSet(args.device, true, callback);
-	}
-
-	_onFlowActionVolumeSet(callback, args) {
-		this._onCapabilityVolumeSetSet(args.device, args.volume, callback);
-	}
-
-	_onFlowActionVolumeMute(callback, args) {
-		this.log('_onFlowActionVolumeMute', args);
-		this._onCapabilityVolumeMuteSet(args.device, true, callback);
-	}
-
-	_onFlowActionVolumeUnmute(callback, args) {
-		this.log('_onFlowActionVolumeUnmute', args);
-		this._onCapabilityVolumeMuteSet(args.device, false, callback);
 	}
 }
 
