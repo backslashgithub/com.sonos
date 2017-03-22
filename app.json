@@ -1,6 +1,6 @@
 {
 	"id": "com.sonos",
-	"version": "2.2.1",
+	"version": "2.2.2",
 	"compatibility": ">=1.2.0",
 	"name": {
 		"en": "Sonos"

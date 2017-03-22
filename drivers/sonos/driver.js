@@ -16,6 +16,8 @@ const icons = [
 	//	'SUB'
 ];
 
+const PLAYLIST_REFRESH_TIMEOUT = 60 * 60 * 1000;
+
 /**
  * Encodes characters not allowed within html/xml tags
  * @param  {String} str
@@ -161,6 +163,8 @@ class Driver extends events.EventEmitter {
 
 	_getPlaylists(data, callback) {
 		const playlistFilterId = data ? data.playlistId : null;
+		clearTimeout(this.playlistRefreshTimeout);
+		this.playlistRefreshTimeout = setTimeout(Homey.manager('media').requestPlaylistsUpdate, PLAYLIST_REFRESH_TIMEOUT);
 		console.log('getPlaylists');
 		const device = this._getDevice();
 		if (device instanceof Error) {
@@ -171,7 +175,7 @@ class Driver extends events.EventEmitter {
 		}
 
 		device.sonos.getMusicLibrary('sonos_playlists', {}, (err, playlists) => {
-			if (err) return err;
+			if (err) return logger.captureException(err) & callback(err);
 			Promise.all(
 				playlists.items.map(playlist =>
 					new Promise((resolve, reject) => {
@@ -313,6 +317,9 @@ class Driver extends events.EventEmitter {
 					});
 				});
 				speaker.on('setActive', (isActive, callback) => {
+					if (isActive) {
+						setTimeout(Homey.manager('media').requestPlaylistsUpdate, 10000);
+					}
 					device.isActiveSpeaker = isActive;
 					device.lastTrack = undefined;
 					return callback(null, isActive);
