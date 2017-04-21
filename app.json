@@ -1,7 +1,7 @@
 {
 	"id": "com.sonos",
-	"version": "2.0.3",
-	"compatibility": ">=1.0.0",
+	"version": "2.3.0",
+	"compatibility": ">=1.2.0",
 	"name": {
 		"en": "Sonos"
 	},
@@ -9,7 +9,9 @@
 		"name": "Athom B.V.",
 		"website": "https://www.athom.com"
 	},
-	"category": [ "music" ],
+	"category": [
+		"music"
+	],
 	"description": {
 		"en": "Sonos for Homey"
 	},
@@ -17,6 +19,11 @@
 		"large": "/assets/images/large.png",
 		"small": "/assets/images/small.png"
 	},
+	"media": [
+		"play",
+		"getPlaylists",
+		"getPlaylist"
+	],
 	"drivers": [
 		{
 			"id": "sonos",
@@ -28,35 +35,13 @@
 				"small": "/drivers/sonos/assets/images/small.png"
 			},
 			"class": "speaker",
-			"capabilities": [ "speaker_playing", "speaker_prev", "speaker_next", "volume_set", "volume_mute" ],
-			"mobile": {
-				"components": [
-					{
-						"id": "icon",
-						"capabilities": []
-					},
-					{
-						"id": "button",
-						"capabilities": [ "speaker_prev", "speaker_playing", "speaker_next" ],
-						"options": {
-							"hideTitle": [ "speaker_prev", "speaker_playing", "speaker_next" ],
-							"toggle": [ "speaker_playing" ],
-							"icons": {
-								"speaker_prev": "drivers/sonos/assets/mobile/prev.svg",
-								"speaker_next": "drivers/sonos/assets/mobile/next.svg",
-								"speaker_playing": {
-									"true": "drivers/sonos/assets/mobile/pause.svg",
-									"false": "drivers/sonos/assets/mobile/play.svg"
-								}
-							}
-						}
-					},
-					{
-						"id": "slider",
-						"capabilities": [ "volume_set" ]
-					}
-				]
-			},
+			"capabilities": [
+				"speaker_playing",
+				"speaker_prev",
+				"speaker_next",
+				"volume_set",
+				"volume_mute"
+			],
 			"pair": [
 				{
 					"id": "list_devices",
@@ -73,11 +58,12 @@
 		}
 	],
 	"flow": {
-		"actions": [
+		"conditions": [
 			{
-				"id": "play",
+				"id": "playback_state",
 				"title": {
-					"en": "Play"
+					"en": "Playback State",
+					"nl": "Afspeel Status"
 				},
 				"args": [
 					{
@@ -85,89 +71,52 @@
 						"name": "device",
 						"filter": {
 							"driver_id": "sonos",
-							"capabilities": "speaker_playing"
-						}
-					}
-				]
-			},
-			{
-				"id": "pause",
-				"title": {
-					"en": "Pause"
-				},
-				"args": [
-					{
-						"type": "device",
-						"name": "device",
-						"filter": {
-							"driver_id": "sonos",
-							"capabilities": "speaker_playing"
-						}
-					}
-				]
-			},
-			{
-				"id": "prev",
-				"title": {
-					"en": "Previous"
-				},
-				"args": [
-					{
-						"type": "device",
-						"name": "device",
-						"filter": {
-							"driver_id": "sonos",
-							"capabilities": "speaker_prev"
-						}
-					}
-				]
-			},
-			{
-				"id": "next",
-				"title": {
-					"en": "Next"
-				},
-				"args": [
-					{
-						"type": "device",
-						"name": "device",
-						"filter": {
-							"driver_id": "sonos",
-							"capabilities": "speaker_next"
-						}
-					}
-				]
-			},
-			{
-				"id": "volume_set",
-				"title": {
-					"en": "Set volume"
-				},
-				"args": [
-					{
-						"type": "device",
-						"name": "device",
-						"filter": {
-							"driver_id": "sonos",
-							"capabilities": "volume_set"
+							"capabilities": "volume_mute"
 						}
 					},
 					{
-						"type": "range",
-						"name": "volume",
-						"min": 0,
-						"max": 1,
-						"step": 0.01,
-						"label": "%",
-						"labelMultiplier": 100,
-						"labelDecimals": 0
+						"name": "state",
+						"type": "dropdown",
+						"values": [
+							{
+								"id": "playing",
+								"label": {
+									"en": "Playing",
+									"nl": "Aan het afspelen"
+								}
+							},
+							{
+								"id": "paused",
+								"label": {
+									"en": "Paused",
+									"nl": "Gepauzeerd"
+								}
+							},
+							{
+								"id": "stopped",
+								"label": {
+									"en": "Stopped",
+									"nl": "Gestopt"
+								}
+							},
+							{
+								"id": "no_media",
+								"label": {
+									"en": "No Media",
+									"nl": "Geen Media"
+								}
+							}
+						]
 					}
 				]
-			},
+			}
+		],
+		"actions": [
 			{
-				"id": "volume_mute",
+				"id": "group_volume_mute",
 				"title": {
-					"en": "Mute"
+					"en": "Mute Group",
+					"nl": "Demp Groep"
 				},
 				"args": [
 					{
@@ -181,9 +130,10 @@
 				]
 			},
 			{
-				"id": "volume_unmute",
+				"id": "group_volume_unmute",
 				"title": {
-					"en": "Unmute"
+					"en": "Unmute Group",
+					"nl": "Dempen van Groep opheffen"
 				},
 				"args": [
 					{

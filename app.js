@@ -1,5 +1,7 @@
 'use strict';
 
-module.exports.init = function() {
+const logger = require('homey-log').Log;
+
+module.exports.init = () => {
 	console.log(`${Homey.manifest.id} running...`);
-}
+};
