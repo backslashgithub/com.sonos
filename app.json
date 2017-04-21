@@ -1,6 +1,6 @@
 {
 	"id": "com.sonos",
-	"version": "2.2.2",
+	"version": "2.3.0",
 	"compatibility": ">=1.2.0",
 	"name": {
 		"en": "Sonos"
@@ -58,11 +58,65 @@
 		}
 	],
 	"flow": {
+		"conditions": [
+			{
+				"id": "playback_state",
+				"title": {
+					"en": "Playback State",
+					"nl": "Afspeel Status"
+				},
+				"args": [
+					{
+						"type": "device",
+						"name": "device",
+						"filter": {
+							"driver_id": "sonos",
+							"capabilities": "volume_mute"
+						}
+					},
+					{
+						"name": "state",
+						"type": "dropdown",
+						"values": [
+							{
+								"id": "playing",
+								"label": {
+									"en": "Playing",
+									"nl": "Aan het afspelen"
+								}
+							},
+							{
+								"id": "paused",
+								"label": {
+									"en": "Paused",
+									"nl": "Gepauzeerd"
+								}
+							},
+							{
+								"id": "stopped",
+								"label": {
+									"en": "Stopped",
+									"nl": "Gestopt"
+								}
+							},
+							{
+								"id": "no_media",
+								"label": {
+									"en": "No Media",
+									"nl": "Geen Media"
+								}
+							}
+						]
+					}
+				]
+			}
+		],
 		"actions": [
 			{
 				"id": "group_volume_mute",
 				"title": {
-					"en": "Mute Group"
+					"en": "Mute Group",
+					"nl": "Demp Groep"
 				},
 				"args": [
 					{
@@ -78,7 +132,8 @@
 			{
 				"id": "group_volume_unmute",
 				"title": {
-					"en": "Unmute Group"
+					"en": "Unmute Group",
+					"nl": "Dempen van Groep opheffen"
 				},
 				"args": [
 					{

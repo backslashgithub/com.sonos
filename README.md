@@ -9,10 +9,13 @@ Play tracks from the Spotify/Soundcloud app to Sonos<br/>
 Play mixed source playlists from Homey Media
 
 ### Known bugs
-Playback of tracks from the Google Play Music app is not possible with Sonos due to the restricted API's.<br/>
-It is possible to play your Google Play Music tracks on Sonos by creating a Sonos Playlist which Homey can play on your Sonos speaker!
+Spotify playback is only possible when you are logged into spotify on the Sonos speaker. The app does not check this yet and will fail to play Spotify songs when you are not logged in.
 
 ##What's new
+####v2.3.0
+Fixed bug where Google Play Music tracks could not be played on Sonos speakers
+Added condition card to check the current playback state of a speaker.
+
 ####v2.2.2
 Added polling for playlist changes each hour<br/>
 Added check for playlist changes each time you switch speakers to a Sonos speaker.

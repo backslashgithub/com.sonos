@@ -4,6 +4,7 @@ const events = require('events');
 const sonos = require('sonos');
 const connectionMap = new Map();
 const logger = require('homey-log').Log;
+const MediaRenderClient = require('upnp-mediarenderer-client');
 
 const icons = [
 	'S1', // Play:1
@@ -53,6 +54,7 @@ class Driver extends events.EventEmitter {
 
 		this._devices = {};
 		this._searchResults = {};
+		this._UPnPClients = {};
 
 		this.init = this._onInit.bind(this);
 		this.pair = this._onPair.bind(this);
@@ -80,6 +82,7 @@ class Driver extends events.EventEmitter {
 		this.capabilities.volume_mute.set = this._onCapabilityVolumeMuteSet.bind(this);
 
 		Homey.manager('flow')
+			.on('condition.playback_state', this._onFlowConditionPlaybackState.bind(this))
 			.on('action.group_volume_mute', this._onFlowActionGroupVolumeMute.bind(this))
 			.on('action.group_volume_unmute', this._onFlowActionGroupVolumeUnmute.bind(this));
 
@@ -256,6 +259,7 @@ class Driver extends events.EventEmitter {
 				deviceData,
 			};
 			this._devices[deviceData.sn] = device;
+			this.getUPnPClient(device);
 
 			this._syncSonosMasterNodes(device);
 
@@ -311,7 +315,7 @@ class Driver extends events.EventEmitter {
 				device.speaker = speaker;
 				speaker.on('setTrack', this._setTrack.bind(this, device));
 				speaker.on('setPosition', (position, callback) => {
-					device.sonos.seek(Math.round(position / 1000), (err, result) => {
+					device.sonos.seek(Math.round(position / 1000), (err) => {
 						if (err) return callback(err);
 						callback(null, position);
 					});
@@ -399,9 +403,9 @@ class Driver extends events.EventEmitter {
 			cb(err, result);
 		};
 		device.lastTrack = undefined;
-		if (track.player_uri === 'homey:app:com.google.music') {
-			return callback(new Error('Unable to play google play music tracks'));
-		}
+		// if (track.player_uri === 'homey:app:com.google.music') {
+		// 	return callback(new Error('Unable to play google play music tracks'));
+		// }
 		device.trackQueued = Boolean(data.opts.delay);
 		console.log('set track', data);
 
@@ -446,7 +450,7 @@ class Driver extends events.EventEmitter {
 					});
 					break;
 				default:
-					this._playUrl(device, track, data.opts, (err) => {
+					this._playUPnPUrl(device, track, data.opts, (err) => {
 						if (err) return callback(err);
 						setPosition();
 					});
@@ -473,13 +477,14 @@ class Driver extends events.EventEmitter {
 		const duration = track.duration ? `${Math.floor(track.duration / 3600000)
 			}:${`0${Math.floor((track.duration % 3600000) / 60000)}`.slice(-2)
 			}:${`0${Math.round((track.duration % 60000) / 1000)}`.slice(-2)}` : null;
+		const protocolInfo = Driver.codecToProtocol(track.codec);
 		const uri = {
 			uri: htmlEntities(track.stream_url),
 			metadata: '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" ' +
 			'xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" ' +
 			'xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dlna="urn:schemas-dlna-org:metadata-1-0/">' +
-			'<item id="R:0/0/0" restricted="1">' +
-			(duration ? `<res duration="${duration}"></res>` : '') +
+			'<item id="f-0" parentId="0" restricted="0">' +
+			`<res ${duration ? `duration="${duration}"` : ''} ${protocolInfo ? `protocolInfo="${protocolInfo}"` : ''}>${track.stream_url}</res>` +
 			`<dc:title>${track.title || track.stream_url}</dc:title>` +
 			`<upnp:artist role="Performer">${
 			((track.artist || []).find(artist => artist.type === 'artist') || {}).name || ''}</upnp:artist>` +
@@ -496,7 +501,6 @@ class Driver extends events.EventEmitter {
 	}
 
 	_playSonosUri(device, track, opts, callback) {
-		const albumArt = track.artwork ? track.artwork.medium || track.artwork.large || track.artwork.small : null;
 		const duration = track.duration ? `${Math.floor(track.duration / 3600000)
 			}:${`0${Math.floor((track.duration % 3600000) / 60000)}`.slice(-2)
 			}:${`0${Math.round((track.duration % 60000) / 1000)}`.slice(-2)}` : null;
@@ -548,6 +552,72 @@ class Driver extends events.EventEmitter {
 				}
 			});
 		});
+		// }
+	}
+
+	_playUPnPUrl(device, track, opts, callback) {
+		// if (delay) {
+		// 	device.sonos.queue(uri, (err, result) => {
+		// 		console.log('queueNext', err, result);
+		// 		callback(err, result);
+		// 	});
+		// } else {
+		const client = this.getUPnPClient(device);
+
+		this.realtime(device.deviceData, 'speaker_playing', false);
+		const artwork = (track.artwork || {});
+		new Promise((resolve, reject) =>
+			client.load(
+				track.stream_url,
+				{
+					contentType: 'audio/mpeg',
+					metadata: {
+						title: track.title,
+						duration: track.duration,
+						artist: (track.artist || []).find(artist => artist.type === 'artist'),
+						creator: (track.artist || []).map(artist => artist.name).join(', '),
+						albumArt: artwork.large || artwork.medium || artwork.small,
+						type: 'audio',
+					},
+				},
+				(err, result) => {
+					console.log('playtrack', err, result);
+					if (err) {
+						return reject(err);
+					}
+					resolve(result);
+				}
+			)
+		)
+			.then(() => {
+				if (opts.position) {
+					return new Promise((resolve, reject) =>
+						device.sonos.seek(Math.round(position / 1000), (err, result) => err ? reject(err) : resolve(result))
+					);
+				}
+			})
+			.catch(() => null)
+			.then(() => {
+				if (opts.startPlaying) {
+					return new Promise((resolve, reject) =>
+						device.sonos.play((err, result) => err ? reject(err) : resolve(result))
+					);
+				}
+			})
+			.then(() => {
+				device.speaker.updateState({ track: track, position: opts.position });
+				this.realtime(device.deviceData, 'speaker_playing', Boolean(opts.startPlaying));
+				callback(null, track);
+			})
+			.catch(callback);
+		// device.sonos.pause(err => {
+		// 	if (err) return console.log('flush err') & callback(err);
+		//
+		// 	device.sonos.queueNext(uri, (err, result) => {
+		// 		console.log('play', err, result);
+		// 		callback(err, result);
+		// 	});
+		// });
 		// }
 	}
 
@@ -632,6 +702,17 @@ class Driver extends events.EventEmitter {
 		return (deviceData ? this._devices[deviceData.sn] : this._devices[Object.keys(this._devices).shift()]) || new Error('invalid_device');
 	}
 
+	getUPnPClient(device) {
+		let client = this._UPnPClients[device.sonos.host];
+		if (!client) {
+			client = new MediaRenderClient(`http://${device.sonos.host}:1400/xml/device_description.xml`);
+			// Preload device description
+			client.getDeviceDescription(() => null);
+			this._UPnPClients[device.sonos.host] = client;
+		}
+		return client;
+	}
+
 	/*
 	 Exports
 	 */
@@ -701,23 +782,28 @@ class Driver extends events.EventEmitter {
 		const device = this._getDevice(deviceData);
 		if (device instanceof Error) return callback(device);
 
-		if (value === true) {
-			device.sonos.play((err) => {
-				if (err) return callback(err);
+		device.sonos.getCurrentState((err, state) => {
+			console.log('_onCapabilitySpeakerPlayingSet', 'state', state);
+			if (err) return callback(err);
+			if (value === true && state !== 'playing' && state !== 'no_media') {
+				device.sonos.play((err) => {
+					if (err) return callback(err);
+					return callback(null, value);
+				});
+			} else if (value === false && state === 'playing') {
+				if (device.nextTrackCallback) {
+					device.nextTrackCallback(new Error('setTrack debounced'));
+					device.nextTrackCallback = null;
+					clearTimeout(device.nextTrackTimeout);
+				}
+				device.sonos.pause((err) => {
+					if (err) return callback(err);
+					return callback(null, value);
+				});
+			} else {
 				return callback(null, value);
-			});
-		} else {
-			if (device.nextTrackCallback) {
-				device.nextTrackCallback(new Error('setTrack debounced'));
-				device.nextTrackCallback = null;
-				clearTimeout(device.nextTrackTimeout);
 			}
-			device.sonos.pause((err) => {
-				if (err) return callback(err);
-				return callback(null, value);
-			});
-		}
-
+		});
 	}
 
 	_onCapabilitySpeakerPrevSet(deviceData, value, callback) {
@@ -770,7 +856,6 @@ class Driver extends events.EventEmitter {
 		).then(result => {
 			const curr = result[0];
 			const diff = value * 100 - curr;
-			const change = 1 + ((diff) / curr);
 
 			return Promise.all([
 				new Promise((resolve, reject) =>
@@ -820,6 +905,20 @@ class Driver extends events.EventEmitter {
 
 	}
 
+	_onFlowConditionPlaybackState(callback, args) {
+		this.log('_onFlowConditionPlaybackState', args);
+
+		const device = this._getDevice(args.device);
+		if (device instanceof Error) return callback(device);
+
+		console.log('get state');
+		device.sonos.getCurrentState((err, state) => {
+			console.log('got state', err, state);
+			if (err) return callback(err);
+			callback(null, args.state === state);
+		});
+	}
+
 	_onFlowActionGroupVolumeMute(callback, args) {
 		this.log('_onFlowActionGroupVolumeMute', args);
 
@@ -848,6 +947,15 @@ class Driver extends events.EventEmitter {
 				)
 			)
 		).then(() => callback(null, true)).catch(callback);
+	}
+
+	static codecToProtocol(codec) {
+		switch (codec) {
+			case 'homey:codec:mp3':
+				return 'http-get:*:audio/mpeg:*';
+			default:
+				return null;
+		}
 	}
 }
 
