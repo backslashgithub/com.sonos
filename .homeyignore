@@ -1,0 +1,9 @@
+api/node_modules/tts-providers
+api/lib/tts-providers/
+api/lib/actions/say*
+node_modules/**/test
+node_modules/**/tst
+node_modules/**/tests
+node_modules.bak
+node_modules_2.bak
+.git

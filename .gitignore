@@ -1,2 +1,5 @@
 .idea
 env.json
+node_modules/**/test
+node_modules/**/tst
+node_modules/**/tests
