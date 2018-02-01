@@ -41,8 +41,6 @@ module.exports = class SonosDevice extends Homey.Device {
 	}
 
 	initInstance() {
-		console.log('GOT INSTNACE', require('util').inspect(this.instance, { depth: 10 }));
-
 		clearTimeout(this.reconnectTimeout);
 		this.setAvailable();
 
@@ -131,8 +129,8 @@ module.exports = class SonosDevice extends Homey.Device {
 			['speaker_playing', this.play],
 			['speaker_prev', this.prev],
 			['speaker_next', this.next],
-			['volume_set', this.setVolume],
-			['volume_mute', this.muteVolume],
+			['volume_set', this.setGroupVolume],
+			['volume_mute', this.muteGroupVolume],
 		]);
 		this.registerMultipleCapabilityListener(this.getCapabilities(), (valueObj, optsObj) => {
 			if (!this.instance) return Promise.reject(new Error('No instance'));
@@ -239,6 +237,7 @@ module.exports = class SonosDevice extends Homey.Device {
 				const onTransportState = () => {
 					if (
 						this.instance.state.elapsedTime < 10000 &&
+						this.instance.state.currentTrack &&
 						decodeURIComponent(this.instance.state.currentTrack.uri).includes(this.nextTrack.stream_url)
 					) {
 						clearTimeout(onNextTrackTimeout);
@@ -248,7 +247,10 @@ module.exports = class SonosDevice extends Homey.Device {
 				};
 				onNextTrackTimeout = setTimeout(() => {
 					this.instance.coordinator.removeListener('transport-state', onTransportState);
-					if (decodeURIComponent(this.instance.state.currentTrack.uri).includes(this.nextTrack.stream_url)) {
+					if (
+						this.instance.state.currentTrack &&
+						decodeURIComponent(this.instance.state.currentTrack.uri).includes(this.nextTrack.stream_url)
+					) {
 						resolve();
 					} else {
 						this.blockSpeakerStateUpdate = false;
@@ -331,16 +333,28 @@ module.exports = class SonosDevice extends Homey.Device {
 		return this.instance.actions.next();
 	}
 
-	setVolume(volume) {
+	setGroupVolume(volume) {
 		if (!this.instance) return Promise.reject(new Error('No instance'));
 
 		return this.instance.actions.groupvolume(volume * 100);
 	}
 
-	muteVolume() {
+	muteGroupVolume(mute) {
 		if (!this.instance) return Promise.reject(new Error('No instance'));
 
-		return this.instance.actions.mute();
+		return this.instance.actions[mute ? groupmute : groupunmute]();
+	}
+
+	setVolume(volume) {
+		if (!this.instance) return Promise.reject(new Error('No instance'));
+
+		return this.instance.actions.volume(volume * 100);
+	}
+
+	muteVolume(mute) {
+		if (!this.instance) return Promise.reject(new Error('No instance'));
+
+		return this.instance.actions[mute ? mute : unmute]();
 	}
 
 	onDeleted() {
