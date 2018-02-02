@@ -1,9 +1,8 @@
 'use strict';
 
 const Homey = require('homey');
-const logger = require('homey-log').Log;
 
-const icons = [
+const ICONS = [
 	'S1', // Play:1
 	'S13', // Play One
 	'S3', // Play:3
@@ -14,18 +13,15 @@ const icons = [
 	'ZP90', // Connect
 	//	'SUB'
 ];
-const urlParser = /^http:\/\/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}):([0-9]{1,5})/i;
-
 const PLAYLIST_REFRESH_TIMEOUT = 60 * 60 * 1000;
+const urlParser = /^http:\/\/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}):([0-9]{1,5})/i;
 
 module.exports = class SonosDriver extends Homey.Driver {
 
 	onInit() {
-		this._searchResults = {};
 		this.api = Homey.app.getApi();
 
 		this.listDevicesTimeout = 20000;
-
 
 		new Homey.FlowCardCondition('playback_state')
 			.register()
@@ -44,36 +40,6 @@ module.exports = class SonosDriver extends Homey.Driver {
 	getPlayers() {
 		return this.api.getPlayers();
 	}
-
-	/**
-	 * Encodes characters not allowed within html/xml tags
-	 * @param  {String} str
-	 * @return {String}
-	 */
-	htmlEntities(str) {
-		return String(str)
-			.replace(/&(?!#?[a-z0-9]+;)/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;');
-	}
-
-	parseUri(str) {
-		return encodeURIComponent(str).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16)}`);
-	}
-
-	parseUrl(url) {
-		const match = urlParser.exec(url);
-		if (!match) return false;
-		return {
-			host: match[1],
-			port: match[2],
-		};
-	}
-
-	/*
-	 Exports
-	 */
 
 	onPair(socket) {
 
@@ -108,7 +74,7 @@ module.exports = class SonosDriver extends Homey.Driver {
 										}
 									};
 
-									if (icons.indexOf(info.modelNumber[0]) !== -1) {
+									if (ICONS.indexOf(info.modelNumber[0]) !== -1) {
 										deviceData.icon =
 											`/models/${info.modelNumber[0]}.svg`
 										;

@@ -5,20 +5,22 @@ const Homey = require('homey');
 const SonosSystem = require('sonos-discovery');
 const SonosNodeAPI = require('./lib/api/sonos-node-api.js');
 
-const settings = {};
-const discovery = new SonosSystem(settings);
-const api = new SonosNodeAPI(discovery, settings);
 const getIdFromPlaylistUri = new RegExp(/#(\d*)$/);
-
-process.on('unhandledRejection', (reason, p) => {
-	console.log('Unhandled Rejection at: Promise', p, 'reason:', reason);
-	// application specific logging, throwing an error, or other logic here
-});
 
 module.exports = class App extends Homey.App {
 
 	onInit() {
+		/*
+		 * Constant key used for sonos codec uri
+		 */
 		this.SONOS_CODEC = 'sonos:track:uri';
+
+		/*
+		 * The Sonos connection api
+		 */
+		const discovery = new SonosSystem(settings);
+		const settings = {};
+		this.api = new SonosNodeAPI(discovery, settings);
 
 		/*
 		 * Homey can periodically request static playlist that are available through
@@ -37,11 +39,10 @@ module.exports = class App extends Homey.App {
 		 * resource and in what format is wanted for playback.
 		 */
 		Homey.ManagerMedia.on('play', (request, callback) => {
-			console.log('STREAM', request.trackId, new Buffer(request.trackId, 'base64').toString('ascii'));
 			callback(null, { stream_url: new Buffer(request.trackId, 'base64').toString('ascii') });
 		});
 
-		api.on('topology-change', () => {
+		this.api.on('topology-change', () => {
 			if ((this.playlistPlayer || {}).uuid !== (this.getPlaylistPlayer() || {}).uuid) {
 				Homey.ManagerMedia.requestPlaylistsUpdate();
 			}
@@ -49,7 +50,7 @@ module.exports = class App extends Homey.App {
 	}
 
 	getPlaylistPlayer() {
-		const players = api.getPlayers();
+		const players = this.api.getPlayers();
 
 		// If no players available return an error
 		if (!players.length) {
@@ -57,7 +58,7 @@ module.exports = class App extends Homey.App {
 		}
 		// If the current playlistplayer is no longer available select a new player
 		if (!(this.playlistPlayer && players.some(player => player.uuid === this.playlistPlayer.uuid))) {
-			this.playlistPlayer = api.getPlayer(players[0].uuid);
+			this.playlistPlayer = this.api.getPlayer(players[0].uuid);
 		}
 		return this.playlistPlayer;
 	}
@@ -116,29 +117,15 @@ module.exports = class App extends Homey.App {
 		});
 	}
 
-	onDeviceAdded() {
-		if (this.playlistLock) {
-			this.playlistLock = 0;
-			Homey.manager('media').requestPlaylistsUpdate();
-		}
-	}
-
-	onDeviceDeleted() {
-		if (!this.getFirstDevice()) {
-			this.playlistLock = 2;
-			Homey.manager('media').requestPlaylistsUpdate();
-		}
-	}
-
 	getApi() {
-		return api;
+		return this.api;
 	}
 
 	restartApi() {
-		if (api.discovery.subscriber) {
-			api.discovery.subscriber.emit('dead');
+		if (this.api.discovery.subscriber) {
+			this.api.discovery.subscriber.emit('dead');
 		} else {
-			api.setDiscovery(new SonosSystem());
+			this.api.setDiscovery(new SonosSystem());
 		}
 	}
 };
