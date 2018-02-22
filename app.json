@@ -1,7 +1,8 @@
 {
 	"id": "com.sonos",
-	"version": "2.3.0",
-	"compatibility": ">=1.2.0",
+	"version": "3.0.0",
+	"compatibility": ">=1.5.0",
+	"sdk": 2,
 	"name": {
 		"en": "Sonos"
 	},
@@ -86,7 +87,7 @@
 								}
 							},
 							{
-								"id": "paused",
+								"id": "paused_playback",
 								"label": {
 									"en": "Paused",
 									"nl": "Gepauzeerd"
@@ -115,8 +116,8 @@
 			{
 				"id": "group_volume_mute",
 				"title": {
-					"en": "Mute Group",
-					"nl": "Demp Groep"
+					"en": "Mute this speaker",
+					"nl": "Demp deze luidspreker"
 				},
 				"args": [
 					{
@@ -132,8 +133,8 @@
 			{
 				"id": "group_volume_unmute",
 				"title": {
-					"en": "Unmute Group",
-					"nl": "Dempen van Groep opheffen"
+					"en": "Unmute this speaker",
+					"nl": "Dempen opheffen voor deze speaker"
 				},
 				"args": [
 					{
@@ -142,6 +143,33 @@
 						"filter": {
 							"driver_id": "sonos",
 							"capabilities": "volume_mute"
+						}
+					}
+				]
+			},
+			{
+				"id": "not_group_volume_set",
+				"title": {
+					"en": "Set volume of this speaker",
+					"nl": "Zet volume van deze speaker"
+				},
+				"args": [
+					{
+						"type": "range",
+						"name": "volume",
+						"min": 0,
+						"max": 1,
+						"step": 0.01,
+						"label": "%",
+						"labelMultiplier": 100,
+						"labelDecimals": 0
+					},
+					{
+						"type": "device",
+						"name": "device",
+						"filter": {
+							"driver_id": "sonos",
+							"capabilities": "volume_set"
 						}
 					}
 				]

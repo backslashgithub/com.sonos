@@ -1,0 +1,11 @@
+{
+	"error": {
+		"unable_to_play_spotify": "Kon spotify nummer niet afspelen. Controleer of u bent ingelogd op spotify op uw Sonos speaker.",
+		"unable_to_play_sonos": "Kon Sonos nummer niet afspelen.",
+		"unable_to_play_track": "Kon nummer niet afspelen.",
+		"unable_to_seek": "Kon positie niet aanpassen",
+		"no_instance": "Niet verbonden met de Sonos speaker. Controleer of uw speaker online is of herstart Homey, probeer daarna opnieuw.",
+		"lost_connection": "Verbinding met de Sonos speaker verloren. Controleer of uw speaker online is of herstart Homey, probeer daarna opnieuw.",
+		"device_not_found": "Kon Sonos speaker niet vinden op het netwerk. Controleer of de speaker online is."
+	}
+}
