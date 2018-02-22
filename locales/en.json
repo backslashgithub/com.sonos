@@ -1,1 +1,11 @@
-{}
+{
+	"error": {
+		"unable_to_play_spotify": "Unable to play spotify track. Make sure you have logged into your spotify account on your sonos system.",
+		"unable_to_play_sonos": "Unable to play Sonos track.",
+		"unable_to_play_track": "Unable to play track.",
+		"unable_to_seek": "Unable to seek track",
+		"no_instance": "Not connected to Sonos system. Please check if the speaker is online or restart Homey, then try again.",
+		"lost_connection": "Lost connection to Sonos Speaker. Please check if the speaker is online or restart Homey, then try again.",
+		"device_not_found": "Could not find Sonos speaker on network. Please check if the speaker is online."
+	}
+}

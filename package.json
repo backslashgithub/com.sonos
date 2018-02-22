@@ -1,6 +1,6 @@
 {
   "name": "com.sonos",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "This app adds support for Sonos devices, e.g. Play/Pause, Previous, Next, Mute/Unmute & Volume control.",
   "main": "\"\"",
   "directories": {
@@ -9,7 +9,8 @@
   "dependencies": {
     "homey-log": "^1.0.5",
     "sonos-discovery": "https://github.com/jishi/node-sonos-discovery/archive/v1.6.0.tar.gz",
-    "sonos-http-api": "git+https://github.com/jishi/node-sonos-http-api.git"
+    "sonos-http-api": "git+https://github.com/athombv/node-sonos-http-api.git",
+    "xml2js": "^0.4.19"
   },
   "devDependencies": {},
   "scripts": {

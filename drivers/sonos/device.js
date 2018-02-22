@@ -1,6 +1,7 @@
 'use strict';
 
 const Homey = require('homey');
+const logger = require('homey-log').Log;
 
 const MAX_RECONNECT_TIMEOUT = 60 * 60 * 1000;
 
@@ -9,6 +10,11 @@ module.exports = class SonosDevice extends Homey.Device {
 	onInit() {
 		this.api = Homey.app.getApi();
 
+		// Store the uuid value in this.uuid for backwards compatibility
+		this.uuid = this.getData().uuid || this.getData().sn;
+
+		// Incrementing ID to detect if a track is requested before the previous track started playing.
+		this.trackRequestId = 0;
 		this.pollTrackInterval = 5000;
 		this.isActive = false;
 
@@ -27,17 +33,18 @@ module.exports = class SonosDevice extends Homey.Device {
 	}
 
 	_getInstance() {
-		const player = this.api.getPlayer(this.getData().sn);
+		const player = this.api.getPlayer(this.uuid);
 
 		if (player instanceof Error) {
+			logger.setExtra({ [this.uuid]: player });
 			return this.onDead();
 		}
 		if (this.instance) return this._updateInstanceState(); // TODO check how to handle disconnect -> reconnect
 
+		logger.setExtra({ [this.uuid]: player });
 		this.instance = player;
 
 		this.emit('instance');
-		console.log(this.instance);
 	}
 
 	initInstance() {
@@ -55,9 +62,22 @@ module.exports = class SonosDevice extends Homey.Device {
 		if (!this.speaker) {
 			this.speaker = new Homey.Speaker(this);
 
-			this.speaker.on('setTrack', this._setTrack.bind(this));
-			this.speaker.on('setPosition', this._setPosition.bind(this));
-			this.speaker.on('setActive', this._setActive.bind(this));
+			this.speaker.on('setActive', (isActive, callback) => {
+				const res = this._setActive(isActive);
+				if (res instanceof Error) return callback(res);
+
+				callback(null, res);
+			});
+			this.speaker.on('setTrack', (track, callback) =>
+				this._setTrack(track)
+					.then(res => callback(null, res))
+					.catch(err => callback(err || new Error()))
+			);
+			this.speaker.on('setPosition', (position, callback) =>
+				this.seek(position)
+					.then(res => callback(null, res))
+					.catch(err => callback(err || new Error()))
+			);
 		}
 		return this.speaker.register({
 			codecs: [Homey.app.SONOS_CODEC, 'spotify:track:id', Homey.Codec.MP3],
@@ -65,7 +85,7 @@ module.exports = class SonosDevice extends Homey.Device {
 	}
 
 	_registerListeners() {
-		if (!this.instance) throw new Error('no_instance');
+		if (!this.instance) throw new Error('error.no_instance');
 		this.instance.on('dead', this.onDead);
 		this.instance.coordinator.on('dead', this.onDead);
 		this.instance.coordinator.on('transport-state', this.onTransportState);
@@ -83,11 +103,11 @@ module.exports = class SonosDevice extends Homey.Device {
 	}
 
 	_onDead() {
-		if (this.speaker && this.speaker.active) this.speaker.setInactive(__('lost_connection'));
+		if (this.speaker && this.speaker.active) this.speaker.setInactive(Homey.__('error.lost_connection'));
 
 		this._unregisterListeners();
 		this.instance = null;
-		this.setUnavailable('device_not_found');
+		this.setUnavailable(Homey.__('error.device_not_found'));
 
 		const tryReconnect = (timeout) => {
 			if (this.instance) return;
@@ -101,7 +121,6 @@ module.exports = class SonosDevice extends Homey.Device {
 	}
 
 	_updateInstanceState() {
-		this.instance.actions.zones().then(result => console.log('ZONE RESULT', require('util').inspect(result, { depth: 10 })));
 		this.setCapabilityValue('volume_set', this.instance.coordinator.groupState.volume / 100);
 		this.setCapabilityValue('volume_mute', this.instance.coordinator.groupState.mute);
 		this.setCapabilityValue('speaker_playing', this.instance.coordinator.state.playbackState === 'PLAYING');
@@ -120,7 +139,6 @@ module.exports = class SonosDevice extends Homey.Device {
 	}
 
 	_onMuteChange({ newMute }) {
-		console.log('mute_change', newMute);
 		this.setCapabilityValue('volume_mute', newMute);
 	}
 
@@ -132,99 +150,60 @@ module.exports = class SonosDevice extends Homey.Device {
 			['volume_set', this.setGroupVolume],
 			['volume_mute', this.muteGroupVolume],
 		]);
-		this.registerMultipleCapabilityListener(this.getCapabilities(), (valueObj, optsObj) => {
-			if (!this.instance) return Promise.reject(new Error('No instance'));
-
-			const actions = [];
-
-			Object.keys(valueObj).forEach(capability => {
-				if (capabilitySetMap.has(capability)) {
-					actions.push(capabilitySetMap.get(capability).call(this, valueObj[capability]));
-				}
-			});
-
-			return Promise.all(actions);
-		}, 500);
+		this.getCapabilities().forEach(capability =>
+			this.registerCapabilityListener(capability, (value) => {
+				return capabilitySetMap.get(capability).call(this, value)
+					.catch(err => {
+						return Promise.reject(err)
+					});
+			})
+		);
 	}
 
-	_setActive(isActive, callback) {
+	_setActive(isActive) {
 		this.isActive = isActive;
 		if (isActive) {
-			if (!this.instance) return callback(new Error('No Connection'));
+			if (!this.instance) return new Error(Homey.__('error.no_instance'));
 		}
 		this.instance.actions.clearqueue();
-		callback();
 	}
 
-	async _setTrack({ track, opts: { position, delay = 0, startPlaying } = {} } = {}, callback) {
-		if (!this.instance) return callback(new Error('No Connection'));
+	async _setTrack({ track, opts: { position, delay = 0, startPlaying } = {} } = {}) {
+		if (!this.instance) return Promise.reject(new Error(Homey.__('error.no_instance')));
 		const funcStart = Date.now();
-		console.log('SET TRACK', track.stream_url, track.codec, position, delay, startPlaying);
+		const trackRequestId = ++this.trackRequestId;
 
 		const resolve = async () => {
+			if (this.trackRequestId !== trackRequestId) {
+				return Promise.reject('debounced');
+			}
+
+			this.blockSpeakerStateUpdate = false;
+
 			this.nextTrack = null;
 			this.currentTrack = track;
 			if (position) {
-				await this.instance.coordinator.actions.timeseek(Math.round(position / 1000))
-					.catch((err) => {
-						console.log('ERROR TIMESEEK', err);
-					});
+				await this.seek(position)
+					.catch(() => null);
 			}
 
 			let emitPositionTimeout;
 			const onTransportState = () => clearTimeout(emitPositionTimeout);
 			emitPositionTimeout = setTimeout(() => {
-				console.log('UPDATE POSITION', this.instance.state.elapsedTime);
 				this.instance.coordinator.removeListener('transport-state', onTransportState);
 				this.speaker.updateState({ position: this.instance.state.elapsedTime * 1000 });
 			}, 3000);
 			this.instance.coordinator.once('transport-state', onTransportState);
 
-			if (callback) {
-				await this.instance.coordinator.actions[startPlaying ? 'play' : 'pause']()
-					.catch((err) => {
-						console.log('ERROR PLAYPAUSE', err);
-					});
-			}
-			if (callback) {
-				callback(null, true);
-			}
-			this.blockSpeakerStateUpdate = false;
+			await (startPlaying ? this.instance.actions.play() : this.instance.actions.pause())
+				.catch(() => null);
 		};
 
-		// const startTimeout = () => {
-		// 	return new Promise((resolve, reject) => {
-		// 		// if so, set the callback on the device object
-		// 		this.queuedCallback = (err) => {
-		// 			// Clear the callback from the device object
-		// 			this.queuedCallback = null;
-		// 			// Clear the timeout that was intended to play the track on the speaker
-		// 			clearTimeout(this.queuedTimeout);
-		// 			reject(err);
-		// 			callback(err);
-		// 		};
-		// 		// Set a timeout function which will play the track on the speaker when the timeout fires
-		// 		this.queuedTimeout = setTimeout(() => {
-		// 			// When the timeout is fired clear the corresponding variables from the device object
-		// 			this.queuedCallback = null;
-		// 			this.queuedTimeout = null;
-		// 			// Call the function which will play the track
-		// 			resolve(this._setTrack({ track, opts: { position, startPlaying } }, callback));
-		// 		}, delay); // set the timeout for the given delay in the opts object
-		// 	});
-		// };
-
-		// Check if the device has an queuedCallback option indicating that there already is a track queued
-		if (this.queuedCallback) {
-			// Call the callback with the track that is queued with an error to indicate that the corresponding track is cancelled
-			this.queuedCallback(new Error('setTrack debounced'));
-		}
-
-		const resolveSetUri = (result) => {
-			console.log('Playing track!', result);
+		const resolveSetUri = () => {
+			this.log('Playing track', track.stream_url);
 
 			if (now) {
-				resolve();
+				return resolve();
 			} else {
 				if (this.currentTrack && this.nextTrack.stream_url === this.currentTrack.stream_url) {
 					if (this.instance.state.elapsedTime < 10000) {
@@ -233,31 +212,36 @@ module.exports = class SonosDevice extends Homey.Device {
 				} else if (decodeURIComponent(this.instance.state.currentTrack.uri).includes(this.nextTrack.stream_url)) {
 					return resolve();
 				}
-				let onNextTrackTimeout;
-				const onTransportState = () => {
-					if (
-						this.instance.state.elapsedTime < 10000 &&
-						this.instance.state.currentTrack &&
-						decodeURIComponent(this.instance.state.currentTrack.uri).includes(this.nextTrack.stream_url)
-					) {
-						clearTimeout(onNextTrackTimeout);
+				return new Promise((res) => {
+					let onNextTrackTimeout;
+					const onTransportState = () => {
+						if (
+							this.instance.state.elapsedTime < 10000 &&
+							this.instance.state.currentTrack &&
+							decodeURIComponent(this.instance.state.currentTrack.uri).includes(this.nextTrack.stream_url)
+						) {
+							clearTimeout(onNextTrackTimeout);
+							this.instance.coordinator.removeListener('transport-state', onTransportState);
+							return res(resolve());
+						}
+					};
+					onNextTrackTimeout = setTimeout(() => {
 						this.instance.coordinator.removeListener('transport-state', onTransportState);
-						resolve();
-					}
-				};
-				onNextTrackTimeout = setTimeout(() => {
-					this.instance.coordinator.removeListener('transport-state', onTransportState);
-					if (
-						this.instance.state.currentTrack &&
-						decodeURIComponent(this.instance.state.currentTrack.uri).includes(this.nextTrack.stream_url)
-					) {
-						resolve();
-					} else {
-						this.blockSpeakerStateUpdate = false;
-						this._setTrack(track, { position, startPlaying }, callback);
-					}
-				}, delay + 5000);
-				this.instance.coordinator.on('transport-state', onTransportState);
+						if (
+							(
+								this.instance.state.currentTrack &&
+								decodeURIComponent(this.instance.state.currentTrack.uri).includes(this.nextTrack.stream_url)
+							) ||
+							this.trackRequestId !== trackRequestId
+						) {
+							return res(resolve());
+						} else {
+							this.blockSpeakerStateUpdate = false;
+							res(this._setTrack({ track, opts: { position, startPlaying } }));
+						}
+					}, delay + 5000);
+					this.instance.coordinator.on('transport-state', onTransportState);
+				});
 			}
 		};
 
@@ -277,84 +261,95 @@ module.exports = class SonosDevice extends Homey.Device {
 					.then(resolveSetUri)
 					.catch(err => {
 						this.blockSpeakerStateUpdate = false;
-						console.log('ERR playing track', err);
-						callback(new Error('Unable to play spotify track. Make sure you have logged into your spotify account on your sonos system.'));
+						this.error('Error playing track', err);
+						logger.captureException(err, { message: 'unable_to_play_spotify', extra: { device: this.uuid } });
+						return Promise.reject(new Error(Homey.__('error.unable_to_play_spotify')));
 					});
 				break;
 			case Homey.app.SONOS_CODEC:
-				const queueUriIndex = track.stream_url.indexOf('/');
-				const queueUri = track.stream_url.slice(0, queueUriIndex);
-				track.stream_url = track.stream_url.slice(queueUriIndex + 1);
-				return this.instance.actions.setsonosuri(now ? 'now' : 'next', track.stream_url, queueUri)
+				return this.instance.actions.setsonosuri(now ? 'now' : 'next', track)
 					.then(resolveSetUri)
 					.catch(err => {
 						this.blockSpeakerStateUpdate = false;
-						console.log('ERR playing track', err);
-						callback(new Error('Unable to play Sonos track.'));
+						this.error('Error playing track', err);
+						logger.captureException(err, { message: 'unable_to_play_sonos', extra: { device: this.uuid } });
+						return Promise.reject(new Error(Homey.__('error.unable_to_play_sonos')));
 					});
 				break;
 			case Homey.Codec.MP3:
-				return this.instance.actions.clearqueue()
-					.catch(() => null)
-					.then(() => this.instance.actions.stream(now ? 'now' : 'next', track))
-					.then(resolve)
+				return this.instance.actions.stream(now ? 'now' : 'next', track)
+					.then(resolveSetUri)
 					.catch(err => {
 						this.blockSpeakerStateUpdate = false;
-						console.log('ERR playing track', err);
-						callback(new Error('Unable to play track.'));
+						this.error('Error playing track', err);
+						logger.captureException(err, { message: 'unable_to_play_track', extra: { device: this.uuid } });
+						return Promise.reject(new Error(Homey.__('error.unable_to_play_track')));
 					});
 				break;
 		}
 	}
 
-	_setPosition(position, callback) {
-		if (!this.instance) return callback(new Error('No Connection'));
-		console.log('SET Position', position);
-		this.instance.coordinator.actions.seek(Math.round(position / 1000))
-			.then(() => callback(null, true))
-			.catch(err => callback(new Error('Unable to seek track')));
+	handleActionError(msg, err) {
+		const userError = new Error(msg);
+		logger.captureException(err, { message: userError.message, extra: { device: this.uuid } });
+		this.error(userError.message, err);
+		return Promise.reject(err);
 	}
 
 	play(state) {
-		if (!this.instance) return Promise.reject(new Error('No instance'));
+		if (!this.instance) return Promise.reject(new Error(Homey.__('error.no_instance')));
 
-		return state ? this.instance.actions.play() : this.instance.actions.pause();
+		return (state ? this.instance.actions.play() : this.instance.actions.pause())
+			.catch(this.handleActionError.bind(this, `Could not ${state ? 'play' : 'pause'}`));
+	}
+
+	seek(position) {
+		if (!this.instance) return Promise.reject(new Error(Homey.__('error.no_instance')));
+
+		return this.instance.coordinator.actions.seek(Math.round(position / 1000))
+			.catch(this.handleActionError.bind(this, `Could not seek to ${position}ms in track`));
 	}
 
 	prev() {
-		if (!this.instance) return Promise.reject(new Error('No instance'));
+		if (!this.instance) return Promise.reject(new Error(Homey.__('error.no_instance')));
 
-		return this.instance.actions.previous();
+		return this.instance.actions.previous()
+			.catch(this.handleActionError.bind(this, 'Could not go to previous track'));
 	}
 
 	next() {
-		if (!this.instance) return Promise.reject(new Error('No instance'));
+		if (!this.instance) return Promise.reject(new Error(Homey.__('error.no_instance')));
 
-		return this.instance.actions.next();
+		return this.instance.actions.next()
+			.catch(this.handleActionError.bind(this, 'Could not go to next track'));
 	}
 
 	setGroupVolume(volume) {
-		if (!this.instance) return Promise.reject(new Error('No instance'));
+		if (!this.instance) return Promise.reject(new Error(Homey.__('error.no_instance')));
 
-		return this.instance.actions.groupvolume(volume * 100);
+		return this.instance.actions.groupvolume(volume * 100)
+			.catch(this.handleActionError.bind(this, `Could not set group volume to ${volume}%`));
 	}
 
 	muteGroupVolume(mute) {
-		if (!this.instance) return Promise.reject(new Error('No instance'));
+		if (!this.instance) return Promise.reject(new Error(Homey.__('error.no_instance')));
 
-		return this.instance.actions[mute ? groupmute : groupunmute]();
+		return this.instance.actions[mute ? groupmute : groupunmute]()
+			.catch(this.handleActionError.bind(this, `Could not ${mute ? '' : 'un'}mute group volume`));
 	}
 
 	setVolume(volume) {
-		if (!this.instance) return Promise.reject(new Error('No instance'));
+		if (!this.instance) return Promise.reject(new Error(Homey.__('error.no_instance')));
 
-		return this.instance.actions.volume(volume * 100);
+		return this.instance.actions.volume(volume * 100)
+			.catch(this.handleActionError.bind(this, `Could not set volume to ${volume}%`));
 	}
 
 	muteVolume(mute) {
-		if (!this.instance) return Promise.reject(new Error('No instance'));
+		if (!this.instance) return Promise.reject(new Error(Homey.__('error.no_instance')));
 
-		return this.instance.actions[mute ? mute : unmute]();
+		return (this.instance.actions[mute ? mute : unmute]())
+			.catch(this.handleActionError.bind(this, `Could not ${mute ? '' : 'un'}mute volume`));
 	}
 
 	onDeleted() {

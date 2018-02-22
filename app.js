@@ -18,20 +18,27 @@ module.exports = class App extends Homey.App {
 		/*
 		 * The Sonos connection api
 		 */
-		const discovery = new SonosSystem(settings);
-		const settings = {};
-		this.api = new SonosNodeAPI(discovery, settings);
+		const discovery = new SonosSystem({});
+		this.api = new SonosNodeAPI(discovery, {});
 
 		/*
 		 * Homey can periodically request static playlist that are available through
 		 * the streaming API (when applicable)
 		 */
-		Homey.ManagerMedia.on('getPlaylists', this._getPlaylists.bind(this));
+		Homey.ManagerMedia.on('getPlaylists', (callback) =>
+			this._getPlaylists()
+				.then(res => callback(null, res))
+				.catch(callback)
+		);
 
 		/*
 		 * Homey might request a specific playlist so it can be refreshed
 		 */
-		Homey.ManagerMedia.on('getPlaylist', this._getPlaylist.bind(this));
+		Homey.ManagerMedia.on('getPlaylist', (query, callback) =>
+			this._getPlaylist(query)
+				.then(res => callback(null, res))
+				.catch(callback)
+		);
 
 		/*
 		 * Respond to a play request by returning a parsed track object.
@@ -63,17 +70,20 @@ module.exports = class App extends Homey.App {
 		return this.playlistPlayer;
 	}
 
-	_getPlaylists(callback) {
+	_getPlaylists() {
 		const player = this.getPlaylistPlayer();
 
 		if (player instanceof Error) {
-			return callback(player);
+			return Promise.reject(player);
 		}
 
-		player.actions.playlists('detailed')
-			.then(playlists => playlists.map(this._parsePlaylist))
-			.then(result => callback(null, result))
-			.catch(err => callback(err));
+		return player.actions.playlists('detailed')
+		//.then(playlists => playlists.map(this._parsePlaylist)) // TODO enable when media api changes in 1.5.8
+			.then(playlists => Promise.all(playlists.map(async (playlist) => {
+				const playlistData = this._parsePlaylist(playlist);
+				const trackData = await this._getPlaylist({ playlistId: playlistData.id });
+				return Object.assign(playlistData, trackData);
+			})));
 	}
 
 	_parsePlaylist(playlist) {
@@ -84,17 +94,16 @@ module.exports = class App extends Homey.App {
 		};
 	}
 
-	_getPlaylist({ playlistId }, callback) {
+	_getPlaylist({ playlistId }) {
 		const player = this.getPlaylistPlayer();
 
 		if (player instanceof Error) {
-			return callback(player);
+			return Promise.reject(player);
 		}
 
-		player.actions.playlistTracks(playlistId, 'detailed')
+		return player.actions.playlistTracks(playlistId, 'detailed')
 			.then(tracks => this._parseTracks(player, playlistId, tracks))
-			.then(tracks => callback(null, { id: playlistId, tracks }))
-			.catch(err => callback(err));
+			.then(tracks => ({ id: playlistId, tracks }));
 	}
 
 	_parseTracks(player, playlistId, tracks) {
@@ -105,7 +114,7 @@ module.exports = class App extends Homey.App {
 			const artwork = albumArtUri ? { small: albumArtUri, medium: albumArtUri, large: albumArtUri } : undefined;
 			return {
 				type: 'track',
-				id: new Buffer(track.id || `SQ:${playlistId}/${track.uri}`).toString('base64'),
+				id: new Buffer(track.id || `SQ:${playlistId}!${track.uri}`).toString('base64'),
 				duration: track.duration * 1000,
 				title: track.title,
 				artist: track.artist ? [{ type: 'artist', name: track.artist }] : undefined,

@@ -13,8 +13,6 @@ const ICONS = [
 	'ZP90', // Connect
 	//	'SUB'
 ];
-const PLAYLIST_REFRESH_TIMEOUT = 60 * 60 * 1000;
-const urlParser = /^http:\/\/([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}):([0-9]{1,5})/i;
 
 module.exports = class SonosDriver extends Homey.Driver {
 
@@ -66,11 +64,10 @@ module.exports = class SonosDriver extends Homey.Driver {
 						.map(player => {
 							return this.api.actions.info(player)
 								.then(info => {
-									console.log('INFO', info);
 									const deviceData = {
 										name: player.roomName,
 										data: {
-											sn: player.uuid,
+											uuid: player.uuid,
 										}
 									};
 
